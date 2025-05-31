@@ -24,7 +24,7 @@ export function ContentCard({ content, onProcess, onSendToLine, onDismiss, isPro
     }
   };
   
-  const handleSendToLine = ()_ => {
+  const handleSendToLine = () => {
     if (content.status === 'processed') {
       onSendToLine(content);
     }
