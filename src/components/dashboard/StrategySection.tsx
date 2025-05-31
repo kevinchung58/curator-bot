@@ -1,6 +1,8 @@
+
 'use client';
 
-import { useFormState, useFormStatus } from 'react-dom';
+import { useActionState } from 'react';
+import { useFormStatus } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
@@ -27,7 +29,7 @@ function SubmitButton() {
 }
 
 export function StrategySection() {
-  const [state, formAction] = useFormState(submitStrategyForm, initialState);
+  const [state, formAction] = useActionState(submitStrategyForm, initialState);
 
   return (
     <Card className="shadow-lg">

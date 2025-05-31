@@ -1,6 +1,8 @@
+
 'use client';
 
-import { useFormState, useFormStatus } from 'react-dom';
+import { useActionState } from 'react';
+import { useFormStatus } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -28,7 +30,7 @@ function SubmitButton() {
 }
 
 export function SettingsClientPage() {
-  const [state, formAction] = useFormState(saveSettings, initialSettingsState);
+  const [state, formAction] = useActionState(saveSettings, initialSettingsState);
   const [currentSettings, setCurrentSettings] = useState<Partial<AppSettings>>({});
   const { toast } = useToast();
 
