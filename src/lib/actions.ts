@@ -1,3 +1,4 @@
+
 'use server';
 
 import { formulateSearchStrategy, FormulateSearchStrategyInput, FormulateSearchStrategyOutput } from '@/ai/flows/formulate-search-strategy';
@@ -62,11 +63,11 @@ export type ProcessContentState = {
 };
 
 export async function processDiscoveredContent(
-  articleId: string, 
-  articleUrl: string, 
+  articleId: string,
+  articleUrl: string,
   topic: string
 ): Promise<ProcessContentState> {
-  
+
   const validatedFields = ProcessContentSchema.safeParse({ articleUrl, topic });
 
   if (!validatedFields.success) {
@@ -82,31 +83,41 @@ export async function processDiscoveredContent(
       topic: validatedFields.data.topic,
     };
     const result: GenerateContentSummaryOutput = await generateContentSummary(input);
-    
+
+    let finalStatus: ProcessedContent['status'] = 'processed';
+    let errorMessage: string | undefined = undefined;
+
+    if (result.title === "Content Fetch Failed") {
+      finalStatus = 'error';
+      // The summary field from the AI often contains a more descriptive error message in this case
+      errorMessage = result.summary || result.progress;
+    }
+
     const content: ProcessedContent = {
-      id: articleId, // Use the passed articleId
+      id: articleId,
       title: result.title,
       summary: result.summary,
       tags: result.tags,
       sourceUrl: result.source_url,
-      status: 'processed',
+      status: finalStatus,
+      progressMessage: result.progress,
+      errorMessage: errorMessage,
     };
-    
+
     // In a real app, you would update a database here.
-    // For now, we just return the processed content.
     // Revalidate path if you update data that this page depends on.
-    // revalidatePath('/'); 
+    // revalidatePath('/');
 
     return {
-      message: 'Content processed successfully.',
+      message: finalStatus === 'processed' ? 'Content processed successfully.' : (result.progress || 'Content processing encountered an issue.'),
       processedContent: content,
       articleId: articleId,
     };
-  } catch (error)
- {
+  } catch (error: any) {
     console.error('Error processing content:', error);
+    const errorMessage = error.message || 'An unknown error occurred during content processing.';
     return {
-      error: 'Error: Could not process content.',
+      error: `Error: Could not process content. ${errorMessage}`.trim(),
       articleId: articleId,
     };
   }

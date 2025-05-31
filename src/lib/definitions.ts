@@ -1,3 +1,4 @@
+
 export type SearchStrategy = {
   keywords: string[];
   targetSites: string[];
@@ -11,6 +12,7 @@ export type ProcessedContent = {
   tags: string[];
   sourceUrl: string;
   status: 'new' | 'processing' | 'processed' | 'error' | 'sentToLine';
+  progressMessage?: string;
   errorMessage?: string;
 };
 

@@ -4,7 +4,7 @@
 ## 🚀 Key Feature Status
 
 - **Strategy Formulation**: When a user inputs a curriculum/topic, the AI suggests relevant search keywords, target websites, and content types to monitor. (Basic implementation complete)
-- **Content Discovery & Processing**: When a user adds a URL, the content is summarized, and tags are generated. (Basic implementation complete, uses local storage for discovered items, processing via AI flow, now with a Genkit tool for web fetching)
+- **Content Discovery & Processing**: When a user adds a URL, the content is summarized, and tags are generated. (Basic implementation complete, uses local storage for discovered items, processing via AI flow, now with a Genkit tool for web fetching and basic progress display)
 - **Settings**: API keys (OpenRouter, Google AI), LINE channel information, GitHub information, default curation topic, etc., can be configured. (UI implemented, settings saved to localStorage on client, server action simulates saving)
 - **Send to LINE**: There's a button to send processed content to LINE, but the actual API integration is a placeholder.
 
@@ -54,7 +54,7 @@
         - Once new content is discovered and fetched, the agent should invoke the `generateContentSummary` Genkit flow.
     - **[ ] Persistent Storage for Discovered Content**:
         - Save newly discovered and processed content items to a database (e.g., Firestore) so they can be displayed in the UI's "Discovered Content Section". This replaces the current `localStorage` approach for items found by the agent.
-    - **[x] Add Visual Status Indicator for Agent Health**:
+    - **[ ] Add Visual Status Indicator for Agent Health**:
         - Implement a way for the agent to report its operational status (e.g., running, error, stopped).
         - Display this status in the UI (e.g., green/yellow/red light icon in the "Content Monitoring & Processing" section) by querying the agent's status from its storage location or a health endpoint.
 
@@ -96,9 +96,9 @@
 
 ### UI/UX Improvements
 
-- **[ ] Detailed Loading State Indication**:
+- **[x] Detailed Loading State Indication**:
     - For AI flows and other long-running actions (strategy formulation, content processing, publishing), provide more granular progress feedback than a simple spinner (e.g., "Fetching content...", "Summarizing...", "Publishing to GitHub...").
-    - Utilize the `progress` field from AI flow outputs.
+    - Utilize the `progress` field from AI flow outputs. (Basic implementation for content processing done).
 - **[ ] Strengthen User Feedback and Notifications**:
     - Continue consistent and informative use of `useToast` for all user actions (success, failure, warnings).
 - **[ ] Improve Input Validation Messages**:
@@ -145,9 +145,9 @@
 - Translated development log TODOs to English.
 - Initial thoughts on LINE integration and Monitoring Agent status visualization.
 - Implemented Genkit Tool (`fetchWebsiteContentTool`) for fetching raw web content and integrated it into the `generateContentSummary` flow.
+- Implemented basic detailed loading state indication for content processing.
 
 ---
 
 This expanded list should provide a more detailed roadmap. Remember, building all of this takes time and iterative development!
 Let me know which areas you'd like to focus on next.
-

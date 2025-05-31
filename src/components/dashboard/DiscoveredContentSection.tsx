@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useTransition } from 'react';
@@ -25,7 +26,7 @@ async function getAppSettings(): Promise<Partial<AppSettings>> {
           return;
         }
       }
-      resolve({ defaultTopic: 'General AI' }); 
+      resolve({ defaultTopic: 'General AI' });
     }, 100);
   });
 }
@@ -87,21 +88,28 @@ export function DiscoveredContentSection() {
 
   const handleProcessContent = (articleId: string, articleUrl: string) => {
     setProcessingItemId(articleId);
-    setDiscoveredItems(prev => prev.map(item => item.id === articleId ? { ...item, status: 'processing' } : item));
+    setDiscoveredItems(prev => prev.map(item => item.id === articleId ? { ...item, status: 'processing', progressMessage: 'Initiating content processing...' } : item));
 
     startTransition(async () => {
       const result = await processDiscoveredContent(articleId, articleUrl, currentTopic);
       if (result.processedContent) {
-        setDiscoveredItems(prev => prev.map(item => item.id === articleId ? { ...result.processedContent!, status: 'processed' } : item));
-        toast({ title: 'Success', description: result.message });
+        // The result.processedContent contains the final status ('processed' or 'error')
+        // and any messages (progressMessage, errorMessage) from the AI flow or action.
+        setDiscoveredItems(prev => prev.map(item => item.id === articleId ? { ...result.processedContent! } : item));
+        toast({
+          title: result.processedContent.status === 'processed' ? 'Success' : 'Processing Issue',
+          description: result.message || (result.processedContent.status === 'processed' ? 'Content processed.' : 'An issue occurred.'),
+          variant: result.processedContent.status === 'error' ? 'destructive' : 'default',
+        });
       } else {
-        setDiscoveredItems(prev => prev.map(item => item.id === articleId ? { ...item, status: 'error', errorMessage: result.error } : item));
+        // This case handles if processDiscoveredContent itself throws an error or returns an error string directly.
+        setDiscoveredItems(prev => prev.map(item => item.id === articleId ? { ...item, status: 'error', errorMessage: result.error, progressMessage: 'Processing failed catastrophically.' } : item));
         toast({ title: 'Error Processing', description: result.error, variant: 'destructive' });
       }
       setProcessingItemId(null);
     });
   };
-  
+
   const handleSendToLine = (content: ProcessedContent) => {
     startTransition(async () => {
       // Simulate sending to LINE

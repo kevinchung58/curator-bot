@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { ProcessedContent } from '@/lib/definitions';
@@ -23,7 +24,7 @@ export function ContentCard({ content, onProcess, onSendToLine, onDismiss, isPro
       onProcess(content.id, content.sourceUrl);
     }
   };
-  
+
   const handleSendToLine = () => {
     if (content.status === 'processed') {
       onSendToLine(content);
@@ -37,7 +38,7 @@ export function ContentCard({ content, onProcess, onSendToLine, onDismiss, isPro
   return (
     <Card className="shadow-md hover:shadow-lg transition-shadow duration-300 flex flex-col h-full">
       <CardHeader>
-        {content.status === 'processed' ? (
+        {content.status === 'processed' && content.title && content.title !== "Content Fetch Failed" ? (
           <CardTitle className="font-headline text-xl">{content.title}</CardTitle>
         ) : (
           <CardTitle className="font-headline text-xl truncate" title={content.sourceUrl.length > 50 ? content.sourceUrl : undefined}>
@@ -55,7 +56,7 @@ export function ContentCard({ content, onProcess, onSendToLine, onDismiss, isPro
         {content.status === 'processing' && (
           <div className="flex items-center justify-center h-full">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <p className="ml-2 text-muted-foreground">Processing content...</p>
+            <p className="ml-2 text-muted-foreground">{content.progressMessage || 'Processing content...'}</p>
           </div>
         )}
         {content.status === 'processed' && (
@@ -71,7 +72,7 @@ export function ContentCard({ content, onProcess, onSendToLine, onDismiss, isPro
         {content.status === 'error' && (
            <div className="flex items-center text-destructive">
              <AlertCircle className="h-5 w-5 mr-2" />
-             <p>{content.errorMessage || 'An error occurred during processing.'}</p>
+             <p>{content.errorMessage || content.progressMessage || 'An error occurred during processing.'}</p>
            </div>
         )}
          {content.status === 'sentToLine' && (
@@ -84,7 +85,7 @@ export function ContentCard({ content, onProcess, onSendToLine, onDismiss, isPro
       <CardFooter className="flex flex-col sm:flex-row gap-2 justify-end pt-4 border-t">
         {(content.status === 'new' || content.status === 'error') && (
           <Button onClick={handleProcess} disabled={isProcessing} variant="outline" size="sm">
-            {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            {isProcessing && content.id === (window as any).processingItemIdForButton ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
             Process Content
           </Button>
         )}
@@ -101,4 +102,10 @@ export function ContentCard({ content, onProcess, onSendToLine, onDismiss, isPro
       </CardFooter>
     </Card>
   );
+}
+// Helper to potentially sync isProcessing state for button spinner if needed,
+// though the direct prop `isProcessing` should generally cover it.
+// This is a bit of a hack and might not be necessary if prop drilling is correct.
+if (typeof window !== 'undefined') {
+  (window as any).processingItemIdForButton = null;
 }
