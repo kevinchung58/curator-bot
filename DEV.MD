@@ -4,7 +4,7 @@
 ## 🚀 Key Feature Status
 
 - **Strategy Formulation**: When a user inputs a curriculum/topic, the AI suggests relevant search keywords, target websites, and content types to monitor. (Basic implementation complete)
-- **Content Discovery & Processing**: When a user adds a URL, the content is summarized, and tags are generated. (Basic implementation complete, uses local storage for discovered items, processing via AI flow, now with a Genkit tool for web fetching and basic progress display)
+- **Content Discovery & Processing**: When a user adds a URL, the content is summarized, and tags are generated. (Basic implementation complete, uses local storage for discovered items, processing via AI flow, now with a Genkit tool for web fetching, basic progress display, and refined AI prompt for summarization with safety settings.)
 - **Settings**: API keys (OpenRouter, Google AI), LINE channel information, GitHub information, default curation topic, etc., can be configured. (UI implemented, settings saved to localStorage on client, server action simulates saving)
 - **Send to LINE**: There's a button to send processed content to LINE, but the actual API integration is a placeholder.
 
@@ -80,14 +80,15 @@
 
 ### AI and Genkit Flow Enhancements
 
-- **[ ] Enhance AI Prompts & Output Consistency**:
-    - Continuously test and refine prompts for `formulateSearchStrategy` and `generateContentSummary` to improve result quality and consistency across various inputs.
-    - Consider adding few-shot examples to prompts.
-    - Review and adjust Gemini safety settings in Genkit flows if content is being unexpectedly blocked.
+- **[x] Enhance AI Prompts & Output Consistency (for `generateContentSummary` flow)**:
+    - **[x]** Continuously test and refine prompts for `generateContentSummary` to improve result quality and consistency across various inputs. (Initial refinement done)
+    - **[ ]** Consider adding few-shot examples to prompts for `generateContentSummary` and `formulateSearchStrategy`.
+    - **[x]** Review and adjust Gemini safety settings in `generateContentSummary` Genkit flow. (Initial settings added)
+    - **[ ]** Refine prompt for `formulateSearchStrategy`.
 - **[x] Implement Genkit Tool for Web Content Fetching**:
-    - **[x]** Create a new Genkit `Tool` (e.g., `fetchWebsiteContentTool`).
-    - **[x]** This tool should accept a URL, fetch its content, parse the HTML to extract the main article text (stripping boilerplate), and return the clean text (initially returns raw HTML, parsing to be refined).
-    - **[x]** Modify the `generateContentSummary` flow to use this tool. The AI model can then be instructed to use this tool to get content for summarization, rather than relying on `{{{articleUrl}}}` directly in the prompt which has limitations.
+    - **[x]** Create a new Genkit `Tool` (`fetchWebsiteContentTool`).
+    - **[x]** This tool accepts a URL, fetches its raw HTML content. (Parsing and cleaning within the tool is a future step; current flow expects LLM to parse the raw HTML from the tool).
+    - **[x]** Modify the `generateContentSummary` flow to use this tool.
 - **[ ] Image Generation/Processing Feature (Optional Enhancement)**:
     - If content often involves images, or if visual aids are desired for summaries:
         - Explore using Genkit (`googleai/gemini-2.0-flash-exp`) to generate relevant illustrative images based on summaries.
@@ -97,8 +98,8 @@
 ### UI/UX Improvements
 
 - **[x] Detailed Loading State Indication**:
-    - For AI flows and other long-running actions (strategy formulation, content processing, publishing), provide more granular progress feedback than a simple spinner (e.g., "Fetching content...", "Summarizing...", "Publishing to GitHub...").
-    - Utilize the `progress` field from AI flow outputs. (Basic implementation for content processing done).
+    - For AI flows and other long-running actions (content processing), provide more granular progress feedback. (Basic implementation for content processing done, leveraging AI flow's progress field).
+    - **[ ]** Extend to strategy formulation and future publishing actions.
 - **[ ] Strengthen User Feedback and Notifications**:
     - Continue consistent and informative use of `useToast` for all user actions (success, failure, warnings).
 - **[ ] Improve Input Validation Messages**:
@@ -113,8 +114,8 @@
 - **[ ] Overall Error Handling Enhancement**:
     - Implement comprehensive error handling across:
         - Client components (React Error Boundaries for sections).
-        - Server Actions (return clear error states).
-        - AI Flows (graceful failure and error reporting).
+        - Server Actions (return clear error states, especially for catastrophic AI flow failures).
+        - AI Flows (graceful failure and error reporting - improved for `generateContentSummary`).
         - Future Monitoring Agent (robust logging and error recovery).
 - **[ ] Write Test Code**:
     - **Unit Tests**: For utility functions, key component logic, Zod schemas (e.g., using Jest/Vitest, React Testing Library).
@@ -145,9 +146,11 @@
 - Translated development log TODOs to English.
 - Initial thoughts on LINE integration and Monitoring Agent status visualization.
 - Implemented Genkit Tool (`fetchWebsiteContentTool`) for fetching raw web content and integrated it into the `generateContentSummary` flow.
-- Implemented basic detailed loading state indication for content processing.
+- Implemented basic detailed loading state indication for content processing by leveraging AI flow's progress output.
+- Refined `generateContentSummary` prompt for better handling of HTML extraction and progress reporting, and added initial Gemini safety settings.
 
 ---
 
 This expanded list should provide a more detailed roadmap. Remember, building all of this takes time and iterative development!
 Let me know which areas you'd like to focus on next.
+

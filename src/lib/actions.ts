@@ -87,10 +87,12 @@ export async function processDiscoveredContent(
     let finalStatus: ProcessedContent['status'] = 'processed';
     let errorMessage: string | undefined = undefined;
 
-    if (result.title === "Content Fetch Failed") {
+    // Check for both fetch and extraction failures indicated by the title from AI
+    if (result.title === "Content Fetch Failed" || result.title === "Content Extraction Failed") {
       finalStatus = 'error';
-      // The summary field from the AI often contains a more descriptive error message in this case
-      errorMessage = result.summary || result.progress;
+      // The summary field from the AI often contains a more descriptive error message in these cases,
+      // or the progress message itself might be the best error indicator.
+      errorMessage = result.summary || result.progress; 
     }
 
     const content: ProcessedContent = {
@@ -100,7 +102,7 @@ export async function processDiscoveredContent(
       tags: result.tags,
       sourceUrl: result.source_url,
       status: finalStatus,
-      progressMessage: result.progress,
+      progressMessage: result.progress, // This message is now more reliably set by the AI
       errorMessage: errorMessage,
     };
 
@@ -109,7 +111,7 @@ export async function processDiscoveredContent(
     // revalidatePath('/');
 
     return {
-      message: finalStatus === 'processed' ? 'Content processed successfully.' : (result.progress || 'Content processing encountered an issue.'),
+      message: finalStatus === 'processed' ? (result.progress || 'Content processed successfully.') : (result.progress || 'Content processing encountered an issue.'),
       processedContent: content,
       articleId: articleId,
     };
@@ -119,6 +121,17 @@ export async function processDiscoveredContent(
     return {
       error: `Error: Could not process content. ${errorMessage}`.trim(),
       articleId: articleId,
+      // Ensure a default processedContent structure for error status if AI flow fails catastrophically before returning structured output
+      processedContent: {
+        id: articleId,
+        sourceUrl: articleUrl,
+        title: 'Processing Error',
+        summary: `Failed to process: ${errorMessage}`,
+        tags: ['error'],
+        status: 'error',
+        progressMessage: `System error during processing: ${errorMessage}`,
+        errorMessage: `System error: ${errorMessage}`,
+      }
     };
   }
 }
@@ -174,3 +187,4 @@ export async function sendToLineAction(content: ProcessedContent): Promise<{ mes
   // Here you would interact with the LINE Messaging API
   return { message: `Content "${content.title}" sent to LINE (simulated).` };
 }
+
