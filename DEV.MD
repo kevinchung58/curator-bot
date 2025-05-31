@@ -4,7 +4,7 @@
 ## 🚀 Key Feature Status
 
 - **Strategy Formulation**: When a user inputs a curriculum/topic, the AI suggests relevant search keywords, target websites, and content types to monitor. (Basic implementation complete)
-- **Content Discovery & Processing**: When a user adds a URL, the content is summarized, and tags are generated. (Basic implementation complete, uses local storage for discovered items, processing via AI flow)
+- **Content Discovery & Processing**: When a user adds a URL, the content is summarized, and tags are generated. (Basic implementation complete, uses local storage for discovered items, processing via AI flow, now with a Genkit tool for web fetching)
 - **Settings**: API keys (OpenRouter, Google AI), LINE channel information, GitHub information, default curation topic, etc., can be configured. (UI implemented, settings saved to localStorage on client, server action simulates saving)
 - **Send to LINE**: There's a button to send processed content to LINE, but the actual API integration is a placeholder.
 
@@ -54,7 +54,7 @@
         - Once new content is discovered and fetched, the agent should invoke the `generateContentSummary` Genkit flow.
     - **[ ] Persistent Storage for Discovered Content**:
         - Save newly discovered and processed content items to a database (e.g., Firestore) so they can be displayed in the UI's "Discovered Content Section". This replaces the current `localStorage` approach for items found by the agent.
-    - **[ ] Add Visual Status Indicator for Agent Health**:
+    - **[x] Add Visual Status Indicator for Agent Health**:
         - Implement a way for the agent to report its operational status (e.g., running, error, stopped).
         - Display this status in the UI (e.g., green/yellow/red light icon in the "Content Monitoring & Processing" section) by querying the agent's status from its storage location or a health endpoint.
 
@@ -84,10 +84,10 @@
     - Continuously test and refine prompts for `formulateSearchStrategy` and `generateContentSummary` to improve result quality and consistency across various inputs.
     - Consider adding few-shot examples to prompts.
     - Review and adjust Gemini safety settings in Genkit flows if content is being unexpectedly blocked.
-- **[ ] Implement Genkit Tool for Web Content Fetching**:
-    - Create a new Genkit `Tool` (e.g., `fetchWebsiteContentTool`).
-    - This tool should accept a URL, fetch its content, parse the HTML to extract the main article text (stripping boilerplate), and return the clean text.
-    - Modify the `generateContentSummary` flow to use this tool. The AI model can then be instructed to use this tool to get content for summarization, rather than relying on `{{{articleUrl}}}` directly in the prompt which has limitations.
+- **[x] Implement Genkit Tool for Web Content Fetching**:
+    - **[x]** Create a new Genkit `Tool` (e.g., `fetchWebsiteContentTool`).
+    - **[x]** This tool should accept a URL, fetch its content, parse the HTML to extract the main article text (stripping boilerplate), and return the clean text (initially returns raw HTML, parsing to be refined).
+    - **[x]** Modify the `generateContentSummary` flow to use this tool. The AI model can then be instructed to use this tool to get content for summarization, rather than relying on `{{{articleUrl}}}` directly in the prompt which has limitations.
 - **[ ] Image Generation/Processing Feature (Optional Enhancement)**:
     - If content often involves images, or if visual aids are desired for summaries:
         - Explore using Genkit (`googleai/gemini-2.0-flash-exp`) to generate relevant illustrative images based on summaries.
@@ -144,6 +144,7 @@
 - Refined UI components and layout.
 - Translated development log TODOs to English.
 - Initial thoughts on LINE integration and Monitoring Agent status visualization.
+- Implemented Genkit Tool (`fetchWebsiteContentTool`) for fetching raw web content and integrated it into the `generateContentSummary` flow.
 
 ---
 
