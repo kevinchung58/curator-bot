@@ -1,3 +1,4 @@
+
 // src/ai/flows/generate-content-summary.ts
 'use server';
 
@@ -12,9 +13,10 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
+import {fetchWebsiteContentTool} from '@/ai/tools/fetch-website-content-tool';
 
 const GenerateContentSummaryInputSchema = z.object({
-  articleUrl: z.string().describe('The URL of the article to summarize.'),
+  articleUrl: z.string().url().describe('The URL of the article to summarize.'),
   topic: z.string().describe('The topic of the teaching materials.'),
 });
 export type GenerateContentSummaryInput = z.infer<typeof GenerateContentSummaryInputSchema>;
@@ -36,24 +38,38 @@ const prompt = ai.definePrompt({
   name: 'generateContentSummaryPrompt',
   input: {schema: GenerateContentSummaryInputSchema},
   output: {schema: GenerateContentSummaryOutputSchema},
-  prompt: `You are an AI teaching content editor.
-  Please write an update proposal for the following webpage content [{{{articleUrl}}}] for my [{{{topic}}}] teaching website.
+  tools: [fetchWebsiteContentTool],
+  prompt: `You are an AI teaching content editor. Your goal is to create an update proposal for a teaching website focused on the topic: {{{topic}}}.
 
-  Requirements:
-  1. Generate an attractive title (no more than 20 characters).
-  2. Generate a content summary of about 150-200 characters, highlighting its value to learners.
-  3. Extract 3-5 key tags.
-  4. The content style should be concise and easy to understand.
-  5. The original source URL must be included.
+You will be given an article URL: {{{articleUrl}}}.
 
-  Output format should use JSON:
-  {
-    "title": "suggested title",
-    "summary": "content summary...",
-    "tags": ["tag1", "tag2", ...],
-    "source_url": "[article URL]",
-    "progress": ""
-  }`,
+VERY IMPORTANT FIRST STEP: You MUST use the 'fetchWebsiteContentTool' with the provided 'articleUrl' to retrieve the raw HTML content of the article. Do not attempt to summarize or invent content if the tool fails or returns an error; instead, your entire response should indicate the failure to fetch the content.
+
+If the 'fetchWebsiteContentTool' is successful and returns HTML content, then proceed with the following steps:
+1.  From the fetched HTML, identify and extract the main textual article content. You should try to ignore navigation menus, sidebars, advertisements, footers, and other non-article boilerplate.
+2.  Based on this extracted main content, generate an attractive title (no more than 20 characters).
+3.  Generate a content summary of about 150-200 characters, highlighting its value to learners for the topic '{{{topic}}}'.
+4.  Extract 3-5 key tags relevant to the content and the topic.
+5.  The content style should be concise and easy to understand.
+6.  The original source URL ({{{articleUrl}}}) must be included in your output.
+
+If you could not fetch or extract meaningful content from the URL using the tool, your output for title, summary, and tags should clearly state that content extraction failed. For example:
+{
+  "title": "Content Fetch Failed",
+  "summary": "Could not retrieve or process content from the provided URL: {{{articleUrl}}}",
+  "tags": ["error", "fetch-failed"],
+  "source_url": "{{{articleUrl}}}",
+  "progress": "Attempted to fetch content, but failed."
+}
+
+Otherwise, the successful output format MUST be JSON:
+{
+  "title": "suggested title",
+  "summary": "content summary...",
+  "tags": ["tag1", "tag2", ...],
+  "source_url": "{{{articleUrl}}}",
+  "progress": ""
+}`,
 });
 
 const generateContentSummaryFlow = ai.defineFlow(
@@ -62,10 +78,30 @@ const generateContentSummaryFlow = ai.defineFlow(
     inputSchema: GenerateContentSummaryInputSchema,
     outputSchema: GenerateContentSummaryOutputSchema,
   },
-  async input => {
-    const {output} = await prompt(input);
-    // add progress message
-    output!.progress = 'Generated a title, summary and tags for the new content.';
-    return output!;
+  async (input: GenerateContentSummaryInput) => {
+    const {output, history} = await prompt(input);
+
+    if (!output) {
+      console.error(
+        'Generate content summary flow: AI did not produce the expected output. This might be due to an issue with the content fetching tool or the LLM failing to process its result. History:',
+        JSON.stringify(history, null, 2)
+      );
+      throw new Error(
+        'Failed to generate content summary. The AI model did not return the expected output.'
+      );
+    }
+    
+    // The 'progress' field should be set by the LLM as per the prompt.
+    // If it's a success, it might be empty or a success message. If failure, a failure message.
+    // Adding a default if LLM forgets, but it's better if LLM handles it.
+    if (output.progress === "") {
+       output.progress = 'Content processing attempted.';
+    }
+    if (output.title !== "Content Fetch Failed") {
+        output.progress = 'Successfully generated title, summary, and tags after fetching content.';
+    }
+
+    return output;
   }
 );
+
