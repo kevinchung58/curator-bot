@@ -16,13 +16,10 @@ export type ProcessedContent = {
   errorMessage?: string;
 };
 
+// AppSettings now only includes non-sensitive, user-configurable preferences.
+// Sensitive API keys (Google, LINE, GitHub PAT) should be set as environment variables on the server.
 export type AppSettings = {
-  openRouterApiKey?: string;
-  googleApiKey?: string; // Assuming Gemini might be used via Google AI Studio
-  lineChannelAccessToken?: string;
-  lineChannelSecret?: string;
   lineUserId?: string;
-  githubPat?: string;
   githubRepoUrl?: string;
   defaultTopic?: string;
 };

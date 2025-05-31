@@ -5,31 +5,29 @@
 
 - **Strategy Formulation**: When a user inputs a curriculum/topic, the AI suggests relevant search keywords, target websites, and content types to monitor. (Basic implementation complete)
 - **Content Discovery & Processing**: When a user adds a URL, the content is summarized, and tags are generated. (Basic implementation complete, uses local storage for discovered items, processing via AI flow, now with a Genkit tool for web fetching, basic progress display, and refined AI prompt for summarization with safety settings.)
-- **Settings**: API keys (OpenRouter, Google AI), LINE channel information, GitHub information, default curation topic, etc., can be configured. (UI implemented, settings saved to localStorage on client, server action simulates saving)
+- **Settings**: Non-sensitive user preferences (default topic, LINE User ID, GitHub Repo URL) can be configured and are saved to `localStorage`. Sensitive API keys (Google AI, LINE, GitHub PAT) are managed via server-side environment variables. (UI updated, `saveSettings` action refined)
 - **Send to LINE**: There's a button to send processed content to LINE, but the actual API integration is a placeholder.
 
 ## 📝 TODO List (English)
 
 ### Core Feature Improvements & Backend Implementation
 
-- **[ ] Implement Actual Settings Storage & Management**:
-    - **[ ] Server-Side Storage for Sensitive Keys**:
-        - Migrate API keys (OpenRouter, Google AI, LINE Channel Access Token/Secret, GitHub PAT) from client-side simulation to secure server-side storage.
-        - Utilize environment variables (e.g., via `.env` locally and Firebase App Hosting configuration for deployment) for these keys.
-        - Consider Google Secret Manager for more advanced secret management if needed.
-    - **[ ] Database for Dynamic User Settings**:
-        - For settings like `defaultTopic`, `githubRepoUrl`, `lineUserId` that users can change via the UI, store them in a persistent database (e.g., Firebase Firestore).
-        - This is essential if user authentication is ever added, or if settings need to persist beyond a single browser.
-    - **[ ] Update `saveSettings` Server Action**:
-        - Modify `src/lib/actions.ts#saveSettings` to write to the chosen server-side storage solutions (environment variables where appropriate, database for dynamic settings).
-        - Ensure proper validation and error handling during the save process.
-        - Remove reliance on `localStorage` for actual persistence of critical settings.
+- **[~] Implement Actual Settings Storage & Management**:
+    - **[x] Server-Side Storage for Sensitive Keys**:
+        - **Clarification**: Sensitive API keys (OpenRouter - *removed as unused*, Google AI, LINE Channel Access Token/Secret, GitHub PAT) are to be managed via server-side environment variables (e.g., `.env` locally, Firebase App Hosting configuration for deployment). They are **not** to be set via the UI or stored in `localStorage`. The settings page UI has been updated to reflect this.
+        - **[ ]** (Future) Consider Google Secret Manager for more advanced secret management if needed.
+    - **[ ] Database for Dynamic User Settings (Non-Sensitive)**:
+        - For non-sensitive settings like `defaultTopic`, `githubRepoUrl`, `lineUserId` that users can change via the UI: currently, these are saved to `localStorage`.
+        - **Future Enhancement**: If user authentication is added, or if these settings need to persist across browsers/devices for a user, migrate them to a persistent database (e.g., Firebase Firestore).
+    - **[~] Update `saveSettings` Server Action**:
+        - **Update**: The `saveSettings` action in `src/lib/actions.ts` now only handles non-sensitive preferences (`defaultTopic`, `lineUserId`, `githubRepoUrl`). It returns these to the client, which then saves them to `localStorage`.
+        - **[ ]** (Future) If/when a database is used for these preferences, modify the action to write to the database.
 
 - **[ ] Implement Actual LINE Bot Integration**:
     - **[ ] Implement `sendToLineAction` Logic**:
         - In `src/lib/actions.ts`, replace the placeholder in `sendToLineAction` with actual LINE Messaging API calls.
         - Use `fetch` or a suitable HTTP client library.
-        - Retrieve `lineChannelAccessToken` and `lineUserId` securely from server-side settings.
+        - Retrieve `lineChannelAccessToken` (from server environment variable) and `lineUserId` (from user settings, passed from client).
     - **[ ] Design Rich Message Format**:
         - Utilize LINE Flex Messages for a more engaging presentation of curated content (title, summary, source URL button, potentially a preview image).
         - Construct the appropriate JSON payload for the chosen message type.
@@ -62,7 +60,7 @@
     - **[ ] Define Content-to-Markdown Conversion**:
         - Specify how curated content (title, summary, tags, source URL) will be formatted into Markdown.
     - **[ ] Secure GitHub PAT Usage**:
-        - Retrieve and use the GitHub Personal Access Token from secure server-side settings.
+        - Retrieve and use the GitHub Personal Access Token from a secure server-side environment variable.
     - **[ ] Implement Git Operations**:
         - Use a library like `octokit/rest.js` or server-side `git` CLI commands to commit and push Markdown files to the user-specified GitHub repository.
     - **[ ] Define File/Repository Structure**:
@@ -81,13 +79,13 @@
 ### AI and Genkit Flow Enhancements
 
 - **[x] Enhance AI Prompts & Output Consistency (for `generateContentSummary` flow)**:
-    - **[x]** Continuously test and refine prompts for `generateContentSummary` to improve result quality and consistency across various inputs. (Initial refinement done)
+    - **[x]** Continuously test and refine prompts for `generateContentSummary` to improve result quality and consistency across various inputs. (Initial refinement done, including progress messaging from LLM)
     - **[ ]** Consider adding few-shot examples to prompts for `generateContentSummary` and `formulateSearchStrategy`.
     - **[x]** Review and adjust Gemini safety settings in `generateContentSummary` Genkit flow. (Initial settings added)
     - **[ ]** Refine prompt for `formulateSearchStrategy`.
 - **[x] Implement Genkit Tool for Web Content Fetching**:
     - **[x]** Create a new Genkit `Tool` (`fetchWebsiteContentTool`).
-    - **[x]** This tool accepts a URL, fetches its raw HTML content. (Parsing and cleaning within the tool is a future step; current flow expects LLM to parse the raw HTML from the tool).
+    - **[x]** This tool accepts a URL, fetches its raw HTML content. (LLM is then prompted to parse/extract from this raw HTML).
     - **[x]** Modify the `generateContentSummary` flow to use this tool.
 - **[ ] Image Generation/Processing Feature (Optional Enhancement)**:
     - If content often involves images, or if visual aids are desired for summaries:
@@ -98,7 +96,7 @@
 ### UI/UX Improvements
 
 - **[x] Detailed Loading State Indication**:
-    - For AI flows and other long-running actions (content processing), provide more granular progress feedback. (Basic implementation for content processing done, leveraging AI flow's progress field).
+    - **[x]** For AI flows and other long-running actions (content processing), provide more granular progress feedback. (Basic implementation for content processing done, leveraging AI flow's progress field and refined server action logic).
     - **[ ]** Extend to strategy formulation and future publishing actions.
 - **[ ] Strengthen User Feedback and Notifications**:
     - Continue consistent and informative use of `useToast` for all user actions (success, failure, warnings).
@@ -114,7 +112,7 @@
 - **[ ] Overall Error Handling Enhancement**:
     - Implement comprehensive error handling across:
         - Client components (React Error Boundaries for sections).
-        - Server Actions (return clear error states, especially for catastrophic AI flow failures).
+        - Server Actions (return clear error states, especially for catastrophic AI flow failures - improved for `generateContentSummary`).
         - AI Flows (graceful failure and error reporting - improved for `generateContentSummary`).
         - Future Monitoring Agent (robust logging and error recovery).
 - **[ ] Write Test Code**:
@@ -130,8 +128,8 @@
 
 - **[ ] Detail `apphosting.yaml` Configuration**:
     - Review and optimize resource settings (CPU, memory, min/max instances) for the production environment, especially considering the potential load from the auto-monitoring agent.
-- **[ ] Environment Variable Management Strategy**:
-    - Formalize the process for managing API keys and other environment-specific settings for local development, staging (if any), and production environments. Ensure sensitive data is never committed to version control.
+- **[x] Environment Variable Management Strategy**:
+    - **Clarification**: Sensitive API keys (Google AI, etc.) must be managed via environment variables (e.g., `.env` locally, platform-specific settings for App Hosting). The Settings UI now directs users accordingly. Non-sensitive user preferences use `localStorage`.
 - **[ ] Logging and Monitoring Strategy**:
     - Enhance server-side logging for server actions and AI flow executions (Genkit has logging capabilities).
     - Set up alerts in Cloud Monitoring (if using Google Cloud) for error rates or performance degradation.
@@ -140,17 +138,17 @@
 
 - Initial UI setup for dashboard and settings.
 - Basic AI integration for strategy formulation and content summarization using Genkit.
-- Implemented client-side storage for discovered content and settings (using localStorage as a temporary solution).
+- Implemented client-side storage for discovered content and (non-sensitive) settings using `localStorage`.
 - Addressed several Next.js runtime, syntax, and hydration errors.
 - Refined UI components and layout.
 - Translated development log TODOs to English.
 - Initial thoughts on LINE integration and Monitoring Agent status visualization.
-- Implemented Genkit Tool (`fetchWebsiteContentTool`) for fetching raw web content and integrated it into the `generateContentSummary` flow.
-- Implemented basic detailed loading state indication for content processing by leveraging AI flow's progress output.
-- Refined `generateContentSummary` prompt for better handling of HTML extraction and progress reporting, and added initial Gemini safety settings.
+- **Implemented Genkit Tool (`fetchWebsiteContentTool`) for fetching raw web content and integrated it into the `generateContentSummary` flow.**
+- **Implemented basic detailed loading state indication for content processing by leveraging AI flow's progress output.**
+- **Refined `generateContentSummary` prompt for better handling of HTML extraction and progress reporting, and added initial Gemini safety settings.**
+- **Refactored Settings page to manage only non-sensitive user preferences in `localStorage`; sensitive API keys are now expected as server-side environment variables.**
 
 ---
 
 This expanded list should provide a more detailed roadmap. Remember, building all of this takes time and iterative development!
 Let me know which areas you'd like to focus on next.
-

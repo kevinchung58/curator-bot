@@ -87,11 +87,8 @@ export async function processDiscoveredContent(
     let finalStatus: ProcessedContent['status'] = 'processed';
     let errorMessage: string | undefined = undefined;
 
-    // Check for both fetch and extraction failures indicated by the title from AI
     if (result.title === "Content Fetch Failed" || result.title === "Content Extraction Failed") {
       finalStatus = 'error';
-      // The summary field from the AI often contains a more descriptive error message in these cases,
-      // or the progress message itself might be the best error indicator.
       errorMessage = result.summary || result.progress; 
     }
 
@@ -102,13 +99,9 @@ export async function processDiscoveredContent(
       tags: result.tags,
       sourceUrl: result.source_url,
       status: finalStatus,
-      progressMessage: result.progress, // This message is now more reliably set by the AI
+      progressMessage: result.progress,
       errorMessage: errorMessage,
     };
-
-    // In a real app, you would update a database here.
-    // Revalidate path if you update data that this page depends on.
-    // revalidatePath('/');
 
     return {
       message: finalStatus === 'processed' ? (result.progress || 'Content processed successfully.') : (result.progress || 'Content processing encountered an issue.'),
@@ -121,7 +114,6 @@ export async function processDiscoveredContent(
     return {
       error: `Error: Could not process content. ${errorMessage}`.trim(),
       articleId: articleId,
-      // Ensure a default processedContent structure for error status if AI flow fails catastrophically before returning structured output
       processedContent: {
         id: articleId,
         sourceUrl: articleUrl,
@@ -138,17 +130,12 @@ export async function processDiscoveredContent(
 
 
 // --- Settings ---
-// This is a placeholder. In a real app, you'd save settings to a database or secure storage.
-// For this example, we won't implement saving settings to avoid backend complexity.
+// User preferences are saved to localStorage on the client-side.
+// Sensitive API keys should be set as environment variables on the server.
 const SettingsFormSchema = z.object({
-  openRouterApiKey: z.string().optional(),
-  googleApiKey: z.string().optional(),
-  lineChannelAccessToken: z.string().optional(),
-  lineChannelSecret: z.string().optional(),
-  lineUserId: z.string().optional(),
-  githubPat: z.string().optional(),
-  githubRepoUrl: z.string().url().optional().or(z.literal('')),
   defaultTopic: z.string().optional(),
+  lineUserId: z.string().optional(),
+  githubRepoUrl: z.string().url().optional().or(z.literal('')),
 });
 
 export type SettingsFormState = {
@@ -165,17 +152,17 @@ export async function saveSettings(prevState: SettingsFormState | undefined, for
 
   if (!validatedFields.success) {
     return {
-      errors: validatedFields.error.flatten().fieldErrors as any,
+      errors: validatedFields.error.flatten().fieldErrors as any, // Cast to any due to Zod's complex error types
       message: 'Validation Error: Please check your input.',
     };
   }
 
-  // In a real application, you would save these settings securely.
-  // For now, we'll just log them and return a success message.
-  console.log("Settings to save (not actually saved):", validatedFields.data);
+  // These settings are intended to be saved in localStorage by the client.
+  // No server-side persistence for these specific fields in this action.
+  console.log("User preferences received (to be saved by client):", validatedFields.data);
 
   return {
-    message: 'Settings updated (simulated). In a real app, these would be saved.',
+    message: 'User preferences updated. They will be saved in your browser.',
     settings: validatedFields.data as AppSettings,
   };
 }
@@ -183,8 +170,7 @@ export async function saveSettings(prevState: SettingsFormState | undefined, for
 // --- Placeholder for LINE Bot action ---
 export async function sendToLineAction(content: ProcessedContent): Promise<{ message: string }> {
   // This is a placeholder. Actual LINE Bot integration is complex.
+  // It would retrieve LINE_USER_ID from settings (localStorage via client) and LINE_CHANNEL_ACCESS_TOKEN from env vars.
   console.log("Sending to LINE (simulated):", content);
-  // Here you would interact with the LINE Messaging API
   return { message: `Content "${content.title}" sent to LINE (simulated).` };
 }
-

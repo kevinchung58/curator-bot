@@ -9,9 +9,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { saveSettings, type SettingsFormState } from '@/lib/actions';
 import type { AppSettings } from '@/lib/definitions';
-import { Loader2, Save, KeyRound, Bot, MessageSquare, Github } from 'lucide-react';
+import { Loader2, Save, Bot, MessageSquare, Github, Info } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 const initialSettingsState: SettingsFormState = {
   message: null,
@@ -35,11 +36,24 @@ export function SettingsClientPage() {
   const { toast } = useToast();
 
   useEffect(() => {
-    // Load settings from localStorage on component mount
     if (typeof window !== 'undefined') {
       const storedSettings = localStorage.getItem('contentCuratorAppSettings');
       if (storedSettings) {
-        setCurrentSettings(JSON.parse(storedSettings));
+        try {
+          const parsedSettings = JSON.parse(storedSettings);
+          // Ensure only expected keys are loaded
+          const validKeys: (keyof AppSettings)[] = ['defaultTopic', 'lineUserId', 'githubRepoUrl'];
+          const filteredSettings: Partial<AppSettings> = {};
+          validKeys.forEach(key => {
+            if (parsedSettings[key] !== undefined) {
+              filteredSettings[key] = parsedSettings[key];
+            }
+          });
+          setCurrentSettings(filteredSettings);
+        } catch (e) {
+          console.error("Failed to parse settings from localStorage", e);
+          localStorage.removeItem('contentCuratorAppSettings'); // Clear potentially corrupted settings
+        }
       }
     }
   }, []);
@@ -50,10 +64,9 @@ export function SettingsClientPage() {
         toast({ title: "Validation Error", description: state.message, variant: "destructive" });
       } else if (state.settings) {
          toast({ title: "Settings Updated", description: state.message });
-         // Save to localStorage
          if (typeof window !== 'undefined') {
            localStorage.setItem('contentCuratorAppSettings', JSON.stringify(state.settings));
-           setCurrentSettings(state.settings); // Update local state for display
+           setCurrentSettings(state.settings); 
          }
       } else {
         toast({ title: "Info", description: state.message });
@@ -61,16 +74,10 @@ export function SettingsClientPage() {
     }
   }, [state, toast]);
 
-
-  const inputFields: { id: keyof AppSettings; label: string; type: string; placeholder: string; icon: React.ElementType }[] = [
-    { id: 'openRouterApiKey', label: 'OpenRouter API Key', type: 'password', placeholder: 'sk-or-xxxxxxxx', icon: KeyRound },
-    { id: 'googleApiKey', label: 'Google AI API Key (Gemini)', type: 'password', placeholder: 'AIzaSyxxxxxxxx', icon: Bot },
+  const userPreferenceFields: { id: keyof AppSettings; label: string; type: string; placeholder: string; icon: React.ElementType }[] = [
     { id: 'defaultTopic', label: 'Default Curation Topic', type: 'text', placeholder: 'e.g., Python Programming', icon: Bot },
-    { id: 'lineChannelAccessToken', label: 'LINE Channel Access Token', type: 'password', placeholder: 'LINE Token', icon: MessageSquare },
-    { id: 'lineChannelSecret', label: 'LINE Channel Secret', type: 'password', placeholder: 'LINE Secret', icon: MessageSquare },
     { id: 'lineUserId', label: 'LINE User ID (for notifications)', type: 'text', placeholder: 'Uxxxxxxxxxxxx', icon: MessageSquare },
-    { id: 'githubPat', label: 'GitHub Personal Access Token', type: 'password', placeholder: 'ghp_xxxxxxxx', icon: Github },
-    { id: 'githubRepoUrl', label: 'GitHub Repository URL', type: 'url', placeholder: 'https://github.com/user/repo.git', icon: Github },
+    { id: 'githubRepoUrl', label: 'GitHub Repository URL (for publishing)', type: 'url', placeholder: 'https://github.com/user/repo.git', icon: Github },
   ];
 
   return (
@@ -78,12 +85,28 @@ export function SettingsClientPage() {
       <CardHeader>
         <CardTitle className="font-headline">Application Settings</CardTitle>
         <CardDescription>
-          Configure API keys and other settings for the Content Curator Bot. Settings are saved in your browser's local storage.
+          Configure your user preferences. These settings are saved in your browser's local storage.
+          Sensitive API keys for backend services (like Google AI, LINE, GitHub) must be configured as environment variables on the server.
         </CardDescription>
       </CardHeader>
       <form action={formAction}>
         <CardContent className="space-y-6">
-          {inputFields.map(field => (
+          <Alert>
+            <Info className="h-4 w-4" />
+            <AlertTitle>API Key Configuration</AlertTitle>
+            <AlertDescription>
+              For the application to function correctly with AI features and integrations, ensure the following server-side environment variables are set:
+              <ul className="list-disc list-inside mt-1 text-xs">
+                <li><code className="font-mono bg-muted px-1 py-0.5 rounded">GOOGLE_API_KEY</code>: For Google AI (Gemini) features.</li>
+                <li>(Future) <code className="font-mono bg-muted px-1 py-0.5 rounded">LINE_CHANNEL_ACCESS_TOKEN</code>: For LINE integration.</li>
+                <li>(Future) <code className="font-mono bg-muted px-1 py-0.5 rounded">LINE_CHANNEL_SECRET</code>: For LINE integration.</li>
+                <li>(Future) <code className="font-mono bg-muted px-1 py-0.5 rounded">GITHUB_PAT</code>: For publishing to GitHub.</li>
+              </ul>
+              These keys are not managed through this UI for security reasons.
+            </AlertDescription>
+          </Alert>
+
+          {userPreferenceFields.map(field => (
             <div key={field.id}>
               <Label htmlFor={field.id} className="text-base flex items-center gap-2">
                 <field.icon className="h-4 w-4 text-muted-foreground" />
