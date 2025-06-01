@@ -3,7 +3,7 @@
 
 ## 🚀 Key Feature Status
 
-- **Strategy Formulation**: When a user inputs a curriculum/topic, the AI suggests relevant search keywords, target websites, and content types to monitor. (Basic implementation complete, prompt refined for schema adherence)
+- **Strategy Formulation**: When a user inputs a curriculum/topic, the AI suggests relevant search keywords, target websites, and content types to monitor. (Basic implementation complete, prompt refined for schema adherence and few-shot examples added)
 - **Content Discovery & Processing**: When a user adds a URL, the content is summarized, and tags are generated. (Basic implementation complete, uses local storage for discovered items, processing via AI flow, now with a Genkit tool for web fetching, basic progress display, and refined AI prompt for summarization with safety settings and few-shot examples.)
 - **Settings**: Non-sensitive user preferences (default topic, LINE User ID, GitHub Repo URL) can be configured and are saved to `localStorage` via a custom hook `useAppSettings`. Sensitive API keys (Google AI, LINE, GitHub PAT) are managed via server-side environment variables. (UI updated, `saveSettings` action refined, `useAppSettings` hook implemented and integrated)
 - **Send to LINE**: Button exists. Core logic to make API call to LINE with a Flex Message implemented in server action. Client-side logic to retrieve and pass `lineUserId` also implemented. Actual sending depends on valid server-side `LINE_CHANNEL_ACCESS_TOKEN` and client-side `lineUserId` configuration. Server-side error parsing from LINE API enhanced.
@@ -90,7 +90,7 @@
     - **[x]** Review and adjust Gemini safety settings in `generateContentSummary` Genkit flow. (Initial settings added)
 - **[x] Refine prompt for `formulateSearchStrategy`**:
     - **[x]** Ensured example JSON in prompt matches Zod schema field names.
-    - **[ ]** (Future) Consider adding few-shot examples for `formulateSearchStrategy`.
+    - **[x]** (Future) Consider adding few-shot examples for `formulateSearchStrategy`.
 - **[x] Implement Genkit Tool for Web Content Fetching**:
     - **[x]** Create a new Genkit `Tool` (`fetchWebsiteContentTool`).
     - **[x]** This tool accepts a URL, fetches its raw HTML content. (LLM is then prompted to parse/extract from this raw HTML).
@@ -168,6 +168,7 @@
 - **Added UI placeholder for simulated agent status in `DiscoveredContentSection`.**
 - **Enhanced `publishToGithubAction` to correctly handle updating existing files.**
 - **Improved loading state indication for action buttons in `ContentCard` with per-button spinners.**
+- **Added few-shot examples to `formulateSearchStrategy` prompt.**
 
 ---
 

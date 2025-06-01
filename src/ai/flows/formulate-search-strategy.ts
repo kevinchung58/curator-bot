@@ -48,12 +48,25 @@ Please provide:
 2.  3-5 high-quality websites, blogs, or resource platforms to monitor regularly.
 3.  Content types to monitor (e.g., news, teaching articles, code examples, academic paper abstracts).
 
-Your output MUST strictly adhere to the following JSON format, using the specified field names:
+Your output MUST strictly adhere to the following JSON format, using the specified field names.
+
+Here is an example:
+
+Input Curriculum:
+"Introduction to Quantum Computing:
+Core Concepts: Qubits, Superposition, Entanglement.
+Algorithms: Shor's Algorithm, Grover's Algorithm.
+Hardware: Superconducting qubits, Trapped ions."
+
+Example JSON Output:
 {
-  "keywords": ["keyword1", "keyword2", ...],
-  "targetSites": ["https://example.com/blog", "https://another-resource.org"],
-  "contentTypesToMonitor": ["articles", "tutorials", "case studies"]
-}`,
+  "keywords": ["quantum computing basics", "qubit explanation", "superposition in quantum", "entanglement for beginners", "Shor's algorithm tutorial", "Grover's algorithm guide", "superconducting qubit technology", "trapped ion quantum computers", "quantum algorithm examples", "future of quantum computing"],
+  "targetSites": ["https://quantum-computing.ibm.com/", "https://www.quantamagazine.org/tag/quantum-computing/", "https://arxiv.org/list/quant-ph/recent", "https://quantumai.googleblog.com/", "https://www.microsoft.com/en-us/quantum/blog"],
+  "contentTypesToMonitor": ["research papers", "technical blog posts", "educational articles", "news updates", "video lectures"]
+}
+
+Now, based on the provided curriculum, generate your response in the specified JSON format.
+`,
 });
 
 const formulateSearchStrategyFlow = ai.defineFlow(
@@ -67,3 +80,4 @@ const formulateSearchStrategyFlow = ai.defineFlow(
     return output!;
   }
 );
+
