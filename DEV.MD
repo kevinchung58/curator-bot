@@ -7,7 +7,7 @@
 - **Content Discovery & Processing**: When a user adds a URL, the content is summarized, and tags are generated. (Basic implementation complete, uses local storage for discovered items, processing via AI flow, now with a Genkit tool for web fetching, basic progress display, and refined AI prompt for summarization with safety settings and few-shot examples.)
 - **Settings**: Non-sensitive user preferences (default topic, LINE User ID, GitHub Repo URL) can be configured and are saved to `localStorage`. Sensitive API keys (Google AI, LINE, GitHub PAT) are managed via server-side environment variables. (UI updated, `saveSettings` action refined)
 - **Send to LINE**: Button exists. Core logic to make API call to LINE with a Flex Message implemented in server action. Client-side logic to retrieve and pass `lineUserId` also implemented. Actual sending depends on valid server-side `LINE_CHANNEL_ACCESS_TOKEN` and client-side `lineUserId` configuration. Server-side error parsing from LINE API enhanced.
-- **Publish to GitHub**: Button exists for processed content. Calls a server action that now generates Markdown for the content and simulates publishing. Client-side logic retrieves `githubRepoUrl` and handles success/failure toasts. Actual Git operations or API calls need implementation. `GITHUB_PAT` environment variable is required.
+- **Publish to GitHub**: Button exists for processed content. Calls a server action that now generates Markdown for the content and **attempts to create/update files in the specified GitHub repository using Octokit**. Client-side logic retrieves `githubRepoUrl` and handles success/failure toasts. Actual Git operations or API calls need implementation. `GITHUB_PAT` environment variable is required.
 
 ## 📝 TODO List (English)
 
@@ -56,21 +56,23 @@
         - Implement a way for the agent to report its operational status (e.g., running, error, stopped).
         - Display this status in the UI (e.g., green/yellow/red light icon in the "Content Monitoring & Processing" section) by querying the agent's status from its storage location or a health endpoint. (User Suggestion - Conceptualized, pending agent implementation)
 
-- **[~] Detail & Implement GitHub Integration Feature**:
+- **[x] Detail & Implement GitHub Integration Feature**:
     - **[x] Define Content-to-Markdown Conversion**:
         - **Specified how curated content (title, summary, tags, source URL) will be formatted into Markdown (including frontmatter) in `publishToGithubAction`.**
     - **[x] Secure GitHub PAT Usage**:
-        - Retrieve and use the GitHub Personal Access Token from a secure server-side environment variable (`GITHUB_PAT`). (Placeholder action checks for this env var).
-    - **[~] Implement Git Operations**:
-        - **Placeholder `publishToGithubAction` created and now generates Markdown.**
-        - **TODO**: Use a library like `octokit/rest.js` or server-side `git` CLI commands to commit and push Markdown files to the user-specified GitHub repository.
-    - **[ ] Define File/Repository Structure**:
-        - Decide on how files will be organized (e.g., one file per curated item, daily/weekly logs, topic-based folders).
+        - Retrieve and use the GitHub Personal Access Token from a secure server-side environment variable (`GITHUB_PAT`). (Action now uses this for Octokit).
+    - **[x] Implement Git Operations**:
+        - **`publishToGithubAction` now uses `@octokit/rest` to create/update files in the specified GitHub repository.**
+        - **Basic error handling for GitHub API calls implemented.**
+        - **NOTE**: Assumes a base directory like `curated-content/` exists in the repo or user creates it. More robust directory creation/checking could be future enhancement.
+    - **[~] Define File/Repository Structure**:
+        - **Decision**: Files will be organized under a `curated-content/` directory.
+        - **Filename**: `YYYY-MM-DD-slugified-title-shortId.md` (e.g., `curated-content/2023-11-21-my-awesome-article-a1b2c3d4.md`).
     - **[x] Create Server Action for Publishing**:
-        - **A server action (`publishToGithubAction`) has been created and enhanced.**
+        - **A server action (`publishToGithubAction`) has been created and significantly enhanced with actual Git operations via Octokit.**
     - **[x] UI Feedback for Publish Operation**:
         - **"Publish to GitHub" button added to `ContentCard` for processed items.**
-        - **Toasts for success/failure of the (simulated) publish operation implemented in `DiscoveredContentSection`.**
+        - **Toasts for success/failure of the publish operation implemented in `DiscoveredContentSection`.**
         - **New status 'publishedToGithub' added to `ProcessedContent` and UI reflects this.**
 
 - **[ ] Content Versioning or History (Optional but useful later)**:
@@ -159,6 +161,7 @@
 - **Added placeholder functionality for "Publish to GitHub" including UI button, server action (which now generates Markdown), and status updates.**
 - **Cleaned up a redundant global font-family CSS rule.**
 - **Defined content-to-Markdown conversion logic within `publishToGithubAction`.**
+- **Implemented actual file creation in GitHub using Octokit within `publishToGithubAction`.**
 
 ---
 

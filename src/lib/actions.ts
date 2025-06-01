@@ -7,6 +7,7 @@ import type { SearchStrategy, ProcessedContent, AppSettings } from './definition
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { format } from 'date-fns';
+import { Octokit } from "@octokit/rest";
 
 // --- Strategy Formulation ---
 const StrategyFormSchema = z.object({
@@ -288,25 +289,42 @@ export async function sendToLineAction(
 }
 
 // --- GitHub Publishing Action ---
+
+function slugify(text: string): string {
+  if (!text) return 'untitled';
+  return text
+    .toString()
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, '-') // Replace spaces with -
+    .replace(/[^\w-]+/g, '') // Remove all non-word chars (alphanumeric, underscore, hyphen)
+    .replace(/--+/g, '-') // Replace multiple - with single -
+    .substring(0, 75); // Limit length for filename
+}
+
 function generateMarkdownContent(content: ProcessedContent): string {
   const today = format(new Date(), 'yyyy-MM-dd');
+  // Ensure title is a string and escape quotes for YAML frontmatter
+  const frontmatterTitle = typeof content.title === 'string' ? content.title.replace(/"/g, '\\"') : 'Untitled Content';
+  
   const frontmatter = `---
-title: "${content.title.replace(/"/g, '\\"')}"
+title: "${frontmatterTitle}"
 source_url: "${content.sourceUrl}"
 tags:
 ${content.tags.map(tag => `  - ${tag}`).join('\n')}
 date_processed: "${today}"
 curated_by: "Content Curator Bot"
+content_id: "${content.id}"
 ---`;
 
   const body = `
-# ${content.title}
+# ${frontmatterTitle}
 
 [Source Article](${content.sourceUrl})
 
 ## Summary
 
-${content.summary}
+${content.summary || 'No summary available.'}
 
 ---
 *Curated by Content Curator Bot on ${today}*
@@ -318,8 +336,9 @@ ${content.summary}
 export async function publishToGithubAction(
   content: ProcessedContent,
   githubRepoUrl: string | undefined | null
-): Promise<{ success: boolean; message: string }> {
+): Promise<{ success: boolean; message: string; fileUrl?: string }> {
   console.log('Attempting to publish to GitHub:', content.title, githubRepoUrl);
+
   if (!githubRepoUrl) {
     return { success: false, message: 'GitHub Repository URL not configured in Settings.' };
   }
@@ -327,18 +346,85 @@ export async function publishToGithubAction(
   if (!githubPat) {
     return { success: false, message: 'GitHub Personal Access Token (GITHUB_PAT) not configured on the server.' };
   }
-  
+
+  const repoUrlMatch = githubRepoUrl.match(/github\.com\/([^\/]+)\/([^\/.]+)(\.git)?$/i);
+  if (!repoUrlMatch || !repoUrlMatch[1] || !repoUrlMatch[2]) {
+    return { success: false, message: 'Invalid GitHub Repository URL format. Expected: https://github.com/owner/repo' };
+  }
+  const owner = repoUrlMatch[1];
+  const repo = repoUrlMatch[2];
+
+  const octokit = new Octokit({ auth: githubPat });
+
   const markdownContent = generateMarkdownContent(content);
-  console.log('Generated Markdown for GitHub:');
-  console.log(markdownContent);
+  const contentBase64 = Buffer.from(markdownContent).toString('base64');
+  
+  const slugifiedTitle = slugify(content.title || 'untitled');
+  const shortId = content.id.substring(0, 8);
+  const fileName = `${format(new Date(), 'yyyy-MM-dd')}-${slugifiedTitle}-${shortId}.md`;
+  const filePath = `curated-content/${fileName}`; // Ensure this directory exists or is created by user. Octokit won't create it.
+                                                // For robust solution, check if dir exists or use a different strategy.
+                                                // For now, let's assume 'curated-content' directory exists or user creates it.
 
-  // Placeholder for actual GitHub API interaction
-  // TODO: Implement actual git operations (clone, add, commit, push) or API calls (Octokit)
-  // For now, simulate success
-  // This timeout simulates async work, like an API call.
-  await new Promise(resolve => setTimeout(resolve, 1000)); 
- 
-  return { success: true, message: `Content "${content.title}" formatted to Markdown and (simulated) published to ${githubRepoUrl}.` };
+  const commitMessage = `feat: Add curated content "${content.title || 'Untitled'}"`;
+
+  try {
+    let existingFileSha: string | undefined = undefined;
+    try {
+      const { data: existingFileData } = await octokit.rest.repos.getContent({
+        owner,
+        repo,
+        path: filePath,
+      });
+      if (existingFileData && !Array.isArray(existingFileData) && existingFileData.type === 'file') {
+        existingFileSha = existingFileData.sha;
+      }
+    } catch (error: any) {
+      // If error is 404, file doesn't exist, which is fine for creation.
+      // Otherwise, it might be a different issue (e.g. permissions, repo not found for getContent)
+      if (error.status !== 404) {
+        console.error('Error checking existing file content:', error);
+        // We can still attempt to create/update, but this might fail if it's a permissions issue etc.
+      }
+    }
+
+    const { data: result } = await octokit.rest.repos.createOrUpdateFileContents({
+      owner,
+      repo,
+      path: filePath,
+      message: commitMessage,
+      content: contentBase64,
+      sha: existingFileSha, // Provide SHA if updating, otherwise it's a create
+      committer: {
+        name: 'Content Curator Bot',
+        email: 'bot@example.com', // Replace with a generic or configurable email
+      },
+      author: {
+        name: 'Content Curator Bot',
+        email: 'bot@example.com',
+      },
+    });
+
+    const fileUrl = result.content?.html_url || `https://github.com/${owner}/${repo}/blob/main/${filePath}`; // Fallback URL
+
+    return { 
+      success: true, 
+      message: `Content "${content.title || 'Untitled'}" ${existingFileSha ? 'updated' : 'created'} on GitHub: ${fileName}`,
+      fileUrl: fileUrl 
+    };
+
+  } catch (error: any) {
+    console.error('GitHub API Error during publishToGithubAction:', error);
+    let errorMessage = 'Failed to publish to GitHub.';
+    if (error.status === 401) {
+      errorMessage = 'GitHub API Error: Bad credentials (Invalid GITHUB_PAT or insufficient permissions).';
+    } else if (error.status === 404) {
+      errorMessage = `GitHub API Error: Repository not found or path "${filePath}" issue. Ensure 'curated-content' directory exists.`;
+    } else if (error.status === 422 && error.message?.includes("sha")) {
+      errorMessage = `GitHub API Error: Conflict updating file. It might have been changed. Try again. Path: ${filePath}`;
+    } else if (error.message) {
+      errorMessage = `GitHub API Error: ${error.message}`;
+    }
+    return { success: false, message: errorMessage };
+  }
 }
-
-    
