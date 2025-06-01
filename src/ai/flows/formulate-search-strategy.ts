@@ -48,11 +48,11 @@ Please provide:
 2.  3-5 high-quality websites, blogs, or resource platforms to monitor regularly.
 3.  Content types to monitor (e.g., news, teaching articles, code examples, academic paper abstracts).
 
-Output format should be JSON:
+Your output MUST strictly adhere to the following JSON format, using the specified field names:
 {
   "keywords": ["keyword1", "keyword2", ...],
-  "target_sites": ["url1", "url2", ...],
-  "content_types_to_monitor": ["type1", "type2", ...]
+  "targetSites": ["https://example.com/blog", "https://another-resource.org"],
+  "contentTypesToMonitor": ["articles", "tutorials", "case studies"]
 }`,
 });
 

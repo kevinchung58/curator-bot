@@ -3,7 +3,7 @@
 
 ## 🚀 Key Feature Status
 
-- **Strategy Formulation**: When a user inputs a curriculum/topic, the AI suggests relevant search keywords, target websites, and content types to monitor. (Basic implementation complete)
+- **Strategy Formulation**: When a user inputs a curriculum/topic, the AI suggests relevant search keywords, target websites, and content types to monitor. (Basic implementation complete, prompt refined for schema adherence)
 - **Content Discovery & Processing**: When a user adds a URL, the content is summarized, and tags are generated. (Basic implementation complete, uses local storage for discovered items, processing via AI flow, now with a Genkit tool for web fetching, basic progress display, and refined AI prompt for summarization with safety settings.)
 - **Settings**: Non-sensitive user preferences (default topic, LINE User ID, GitHub Repo URL) can be configured and are saved to `localStorage`. Sensitive API keys (Google AI, LINE, GitHub PAT) are managed via server-side environment variables. (UI updated, `saveSettings` action refined)
 - **Send to LINE**: Button exists. **Core logic to make API call to LINE with a Flex Message implemented in server action. Client-side logic to retrieve and pass `lineUserId` also implemented. Actual sending depends on valid server-side `LINE_CHANNEL_ACCESS_TOKEN` and client-side `lineUserId` configuration.**
@@ -79,9 +79,11 @@
 
 - **[x] Enhance AI Prompts & Output Consistency (for `generateContentSummary` flow)**:
     - **[x]** Continuously test and refine prompts for `generateContentSummary` to improve result quality and consistency across various inputs. (Initial refinement done, including progress messaging from LLM)
-    - **[ ]** Consider adding few-shot examples to prompts for `generateContentSummary` and `formulateSearchStrategy`.
+    - **[ ]** Consider adding few-shot examples to prompts for `generateContentSummary`.
     - **[x]** Review and adjust Gemini safety settings in `generateContentSummary` Genkit flow. (Initial settings added)
-    - **[ ]** Refine prompt for `formulateSearchStrategy`.
+- **[x] Refine prompt for `formulateSearchStrategy`**:
+    - **[x]** Ensured example JSON in prompt matches Zod schema field names.
+    - **[ ]** (Future) Consider adding few-shot examples for `formulateSearchStrategy`.
 - **[x] Implement Genkit Tool for Web Content Fetching**:
     - **[x]** Create a new Genkit `Tool` (`fetchWebsiteContentTool`).
     - **[x]** This tool accepts a URL, fetches its raw HTML content. (LLM is then prompted to parse/extract from this raw HTML).
@@ -147,6 +149,7 @@
 - **Refined `generateContentSummary` prompt for better handling of HTML extraction and progress reporting, and added initial Gemini safety settings.**
 - **Refactored Settings page to manage only non-sensitive user preferences in `localStorage`; sensitive API keys are now expected as server-side environment variables.**
 - **[~] Implemented core logic for `sendToLineAction` to make API calls to LINE with a basic Flex Message. Client-side updated to pass `lineUserId`.**
+- **[x] Refined `formulateSearchStrategy` prompt to ensure output JSON field names match the Zod schema.**
 
 ---
 
