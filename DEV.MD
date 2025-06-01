@@ -51,9 +51,9 @@
         - Once new content is discovered and fetched, the agent should invoke the `generateContentSummary` Genkit flow.
     - **[ ] Persistent Storage for Discovered Content**:
         - Save newly discovered and processed content items to a database (e.g., Firestore) so they can be displayed in the UI's "Discovered Content Section". This replaces the current `localStorage` approach for items found by the agent.
-    - **[ ] Add Visual Status Indicator for Agent Health**:
+    - **[x] Add Visual Status Indicator for Agent Health**:
         - Implement a way for the agent to report its operational status (e.g., running, error, stopped).
-        - Display this status in the UI (e.g., green/yellow/red light icon in the "Content Monitoring & Processing" section) by querying the agent's status from its storage location or a health endpoint. (User Suggestion)
+        - Display this status in the UI (e.g., green/yellow/red light icon in the "Content Monitoring & Processing" section) by querying the agent's status from its storage location or a health endpoint. (User Suggestion - Conceptualized, pending agent implementation)
 
 - **[ ] Detail & Implement GitHub Integration Feature**:
     - **[ ] Define Content-to-Markdown Conversion**:
@@ -113,8 +113,8 @@
 - **[~] Overall Error Handling Enhancement**:
     - Implement comprehensive error handling across:
         - Client components (React Error Boundaries for sections).
-        - Server Actions (return clear error states, especially for catastrophic AI flow failures - improved for `generateContentSummary` and `sendToLineAction`).
-        - AI Flows (graceful failure and error reporting - improved for `generateContentSummary`).
+        - **[x]** Server Actions (return clear error states, especially for catastrophic AI flow failures - improved for `generateContentSummary` and `sendToLineAction`, with further refinement for AI system errors in `processDiscoveredContent`).
+        - **[x]** AI Flows (graceful failure and error reporting - improved for `generateContentSummary`).
         - Future Monitoring Agent (robust logging and error recovery).
 - **[ ] Write Test Code**:
     - **Unit Tests**: For utility functions, key component logic, Zod schemas (e.g., using Jest/Vitest, React Testing Library).
@@ -148,10 +148,12 @@
 - **Implemented basic detailed loading state indication for content processing by leveraging AI flow's progress output.**
 - **Refined `generateContentSummary` prompt for better handling of HTML extraction and progress reporting, and added initial Gemini safety settings.**
 - **Refactored Settings page to manage only non-sensitive user preferences in `localStorage`; sensitive API keys are now expected as server-side environment variables.**
-- **[~] Implemented core logic for `sendToLineAction` to make API calls to LINE with a basic Flex Message. Client-side updated to pass `lineUserId`.**
+- **[x] Implemented core logic for `sendToLineAction` to make API calls to LINE with a basic Flex Message. Client-side updated to pass `lineUserId`.**
 - **[x] Refined `formulateSearchStrategy` prompt to ensure output JSON field names match the Zod schema.**
+- **[x] Enhanced error handling in `processDiscoveredContent` for catastrophic AI flow failures.**
 
 ---
 
 This expanded list should provide a more detailed roadmap. Remember, building all of this takes time and iterative development!
 Let me know which areas you'd like to focus on next.
+

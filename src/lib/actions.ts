@@ -109,20 +109,20 @@ export async function processDiscoveredContent(
       articleId: articleId,
     };
   } catch (error: any) {
-    console.error('Error processing content:', error);
-    const errorMessage = error.message || 'An unknown error occurred during content processing.';
+    console.error('Error processing content (AI flow system error):', error);
+    const systemErrorMessage = error.message || 'An unknown AI system error occurred during content processing.';
     return {
-      error: `Error: Could not process content. ${errorMessage}`.trim(),
+      error: `Error: Content processing failed due to an AI system issue.`, // Main toast message
       articleId: articleId,
       processedContent: {
         id: articleId,
         sourceUrl: articleUrl,
-        title: 'Processing Error',
-        summary: `Failed to process: ${errorMessage}`,
-        tags: ['error'],
+        title: 'AI System Error',
+        summary: 'The AI model encountered an unexpected system error or did not return a valid response. Please try again later or check server logs if the issue persists.',
+        tags: ['error', 'ai-system-error', 'processing-failure'],
         status: 'error',
-        progressMessage: `System error during processing: ${errorMessage}`,
-        errorMessage: `System error: ${errorMessage}`,
+        progressMessage: `AI system error: ${systemErrorMessage}`,
+        errorMessage: `AI system error: ${systemErrorMessage}`,
       }
     };
   }
@@ -272,3 +272,4 @@ export async function sendToLineAction(
     return { success: false, message: `Failed to send to LINE: ${error.message}` };
   }
 }
+
