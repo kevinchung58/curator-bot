@@ -6,6 +6,7 @@ import { generateContentSummary, GenerateContentSummaryInput, GenerateContentSum
 import type { SearchStrategy, ProcessedContent, AppSettings } from './definitions';
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
+import { format } from 'date-fns';
 
 // --- Strategy Formulation ---
 const StrategyFormSchema = z.object({
@@ -286,7 +287,34 @@ export async function sendToLineAction(
   }
 }
 
-// --- GitHub Publishing Action (Placeholder) ---
+// --- GitHub Publishing Action ---
+function generateMarkdownContent(content: ProcessedContent): string {
+  const today = format(new Date(), 'yyyy-MM-dd');
+  const frontmatter = `---
+title: "${content.title.replace(/"/g, '\\"')}"
+source_url: "${content.sourceUrl}"
+tags:
+${content.tags.map(tag => `  - ${tag}`).join('\n')}
+date_processed: "${today}"
+curated_by: "Content Curator Bot"
+---`;
+
+  const body = `
+# ${content.title}
+
+[Source Article](${content.sourceUrl})
+
+## Summary
+
+${content.summary}
+
+---
+*Curated by Content Curator Bot on ${today}*
+`;
+
+  return `${frontmatter}\n${body}`;
+}
+
 export async function publishToGithubAction(
   content: ProcessedContent,
   githubRepoUrl: string | undefined | null
@@ -300,11 +328,17 @@ export async function publishToGithubAction(
     return { success: false, message: 'GitHub Personal Access Token (GITHUB_PAT) not configured on the server.' };
   }
   
+  const markdownContent = generateMarkdownContent(content);
+  console.log('Generated Markdown for GitHub:');
+  console.log(markdownContent);
+
   // Placeholder for actual GitHub API interaction
   // TODO: Implement actual git operations (clone, add, commit, push) or API calls (Octokit)
   // For now, simulate success
   // This timeout simulates async work, like an API call.
   await new Promise(resolve => setTimeout(resolve, 1000)); 
  
-  return { success: true, message: `Content "${content.title}" (simulated) published to ${githubRepoUrl}.` };
+  return { success: true, message: `Content "${content.title}" formatted to Markdown and (simulated) published to ${githubRepoUrl}.` };
 }
+
+    
