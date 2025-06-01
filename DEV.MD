@@ -5,7 +5,7 @@
 
 - **Strategy Formulation**: When a user inputs a curriculum/topic, the AI suggests relevant search keywords, target websites, and content types to monitor. (Basic implementation complete, prompt refined for schema adherence)
 - **Content Discovery & Processing**: When a user adds a URL, the content is summarized, and tags are generated. (Basic implementation complete, uses local storage for discovered items, processing via AI flow, now with a Genkit tool for web fetching, basic progress display, and refined AI prompt for summarization with safety settings and few-shot examples.)
-- **Settings**: Non-sensitive user preferences (default topic, LINE User ID, GitHub Repo URL) can be configured and are saved to `localStorage`. Sensitive API keys (Google AI, LINE, GitHub PAT) are managed via server-side environment variables. (UI updated, `saveSettings` action refined)
+- **Settings**: Non-sensitive user preferences (default topic, LINE User ID, GitHub Repo URL) can be configured and are saved to `localStorage` via a custom hook `useAppSettings`. Sensitive API keys (Google AI, LINE, GitHub PAT) are managed via server-side environment variables. (UI updated, `saveSettings` action refined, `useAppSettings` hook implemented and integrated)
 - **Send to LINE**: Button exists. Core logic to make API call to LINE with a Flex Message implemented in server action. Client-side logic to retrieve and pass `lineUserId` also implemented. Actual sending depends on valid server-side `LINE_CHANNEL_ACCESS_TOKEN` and client-side `lineUserId` configuration. Server-side error parsing from LINE API enhanced.
 - **Publish to GitHub**: Button exists for processed content. Calls a server action that now generates Markdown for the content and creates/updates files in the specified GitHub repository using Octokit. Client-side logic retrieves `githubRepoUrl` and handles success/failure toasts. `GITHUB_PAT` environment variable is required.
 
@@ -17,11 +17,11 @@
     - **[x] Server-Side Storage for Sensitive Keys**:
         - **Clarification**: Sensitive API keys (Google AI, LINE Channel Access Token, GitHub PAT) are to be managed via server-side environment variables (e.g., `.env` locally, Firebase App Hosting configuration for deployment). They are **not** to be set via the UI or stored in `localStorage`. The settings page UI has been updated to reflect this.
         - **[ ]** (Future) Consider Google Secret Manager for more advanced secret management if needed.
-    - **[ ] Database for Dynamic User Settings (Non-Sensitive)**:
-        - For non-sensitive settings like `defaultTopic`, `githubRepoUrl`, `lineUserId` that users can change via the UI: currently, these are saved to `localStorage`.
-        - **Future Enhancement**: If user authentication is added, or if these settings need to persist across browsers/devices for a user, migrate them to a persistent database (e.g., Firebase Firestore).
+    - **[x] Client-Side Storage for Non-Sensitive Preferences (localStorage via Hook)**:
+        - **[x]** Non-sensitive settings like `defaultTopic`, `githubRepoUrl`, `lineUserId` are saved to `localStorage` managed by a custom `useAppSettings` hook.
+        - **[ ]** (Future) If user authentication is added, or if these settings need to persist across browsers/devices for a user, migrate them to a persistent database (e.g., Firebase Firestore).
     - **[x] Update `saveSettings` Server Action**:
-        - **Update**: The `saveSettings` action in `src/lib/actions.ts` now only handles non-sensitive preferences (`defaultTopic`, `lineUserId`, `githubRepoUrl`). It returns these to the client, which then saves them to `localStorage`.
+        - **Update**: The `saveSettings` action in `src/lib/actions.ts` now only handles non-sensitive preferences (`defaultTopic`, `lineUserId`, `githubRepoUrl`). It returns these to the client. The `useAppSettings` hook handles saving them to `localStorage`.
         - **[ ]** (Future) If/when a database is used for these preferences, modify the action to write to the database.
 
 - **[x] Implement Actual LINE Bot Integration**:
@@ -129,7 +129,8 @@
     - **Unit Tests**: For utility functions, key component logic, Zod schemas (e.g., using Jest/Vitest, React Testing Library).
     - **Integration Tests**: For server actions interacting with AI flows and database operations.
     - **E2E Tests (Future)**: Define and automate end-to-end test scenarios for key user workflows (e.g., using Playwright or Cypress).
-- **[ ] Code Refactoring**:
+- **[~] Code Refactoring**:
+    - **[x]** Created `useAppSettings` hook to centralize `localStorage` management for application settings.
     - Conduct ongoing code refactoring: remove duplicate code, ensure components are well-defined and reusable, improve readability and maintainability.
 - **[ ] Dependency Management**:
     - Regularly check and update library versions in `package.json`, addressing any breaking changes.
@@ -139,7 +140,7 @@
 - **[ ] Detail `apphosting.yaml` Configuration**:
     - Review and optimize resource settings (CPU, memory, min/max instances) for the production environment, especially considering the potential load from the auto-monitoring agent.
 - **[x] Environment Variable Management Strategy**:
-    - **Clarification**: Sensitive API keys (Google AI, LINE_CHANNEL_ACCESS_TOKEN, GITHUB_PAT etc.) must be managed via environment variables (e.g., `.env` locally, platform-specific settings for App Hosting). The Settings UI now directs users accordingly. Non-sensitive user preferences use `localStorage`.
+    - **Clarification**: Sensitive API keys (Google AI, LINE_CHANNEL_ACCESS_TOKEN, GITHUB_PAT etc.) must be managed via environment variables (e.g., `.env` locally, platform-specific settings for App Hosting). The Settings UI now directs users accordingly. Non-sensitive user preferences use `localStorage` (managed by `useAppSettings` hook).
 - **[ ] Logging and Monitoring Strategy**:
     - Enhance server-side logging for server actions and AI flow executions (Genkit has logging capabilities).
     - Set up alerts in Cloud Monitoring (if using Google Cloud) for error rates or performance degradation.
@@ -156,7 +157,7 @@
 - **Implemented Genkit Tool (`fetchWebsiteContentTool`) for fetching raw web content and integrated it into the `generateContentSummary` flow.**
 - **Implemented basic detailed loading state indication for content processing by leveraging AI flow's progress output.**
 - **Refined `generateContentSummary` prompt for better handling of HTML extraction and progress reporting, added initial Gemini safety settings, and added few-shot examples.**
-- **Refactored Settings page to manage only non-sensitive user preferences in `localStorage`; sensitive API keys are now expected as server-side environment variables.**
+- **Refactored Settings page to manage only non-sensitive user preferences in `localStorage`; sensitive API keys are now expected as server-side environment variables. Created `useAppSettings` hook to manage this client-side storage.**
 - **Implemented core logic for `sendToLineAction` to make API calls to LINE with a basic Flex Message. Client-side updated to pass `lineUserId`. Server-side error parsing from LINE API enhanced.**
 - **Refined `formulateSearchStrategy` prompt to ensure output JSON field names match the Zod schema.**
 - **Enhanced error handling in `processDiscoveredContent` for catastrophic AI flow failures.**

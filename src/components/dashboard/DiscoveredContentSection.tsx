@@ -9,39 +9,17 @@ import { Label } from '@/components/ui/label';
 import { processDiscoveredContent, sendToLineAction, publishToGithubAction } from '@/lib/actions';
 import type { ProcessedContent, AppSettings } from '@/lib/definitions';
 import { ContentCard } from './ContentCard';
-import { PlusCircle, Search, Bot, AlertTriangle, Info, Github, CheckCircle2, XCircle, HelpCircle } from 'lucide-react';
+import { PlusCircle, Search, Bot, AlertTriangle, Info, Github, CheckCircle2, XCircle, HelpCircle, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useAppSettings } from '@/hooks/useAppSettings';
 import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs
-
-async function getAppSettings(): Promise<Partial<AppSettings>> {
-  return new Promise(resolve => {
-    setTimeout(() => {
-      if (typeof window !== 'undefined') {
-        const storedSettings = localStorage.getItem('contentCuratorAppSettings');
-        if (storedSettings) {
-          try {
-            const parsedSettings = JSON.parse(storedSettings) as AppSettings;
-            resolve({
-              defaultTopic: parsedSettings.defaultTopic || 'General AI',
-              lineUserId: parsedSettings.lineUserId,
-              githubRepoUrl: parsedSettings.githubRepoUrl
-            });
-            return;
-          } catch (e) {
-            console.error("Failed to parse settings from localStorage", e);
-          }
-        }
-      }
-      resolve({ defaultTopic: 'General AI', lineUserId: undefined, githubRepoUrl: undefined });
-    }, 100);
-  });
-}
-
 
 export function DiscoveredContentSection() {
   const [discoveredItems, setDiscoveredItems] = useState<ProcessedContent[]>([]);
   const [newUrl, setNewUrl] = useState('');
-  const [currentTopic, setCurrentTopic] = useState('General Tech');
+  
+  const [appSettings, _, isLoadingAppSettings] = useAppSettings();
+  const [currentTopic, setCurrentTopic] = useState('General AI'); // Default fallback
   const [currentLineUserId, setCurrentLineUserId] = useState<string | undefined>(undefined);
   const [currentGithubRepoUrl, setCurrentGithubRepoUrl] = useState<string | undefined>(undefined);
   
@@ -53,21 +31,20 @@ export function DiscoveredContentSection() {
   const [isTransitionGlobalPending, startTransition] = useTransition();
 
   type AgentStatusValue = 'running' | 'degraded' | 'offline' | 'unknown';
-  const [agentStatus, setAgentStatus] = useState<AgentStatusValue>('running');
+  const [agentStatus, setAgentStatus] = useState<AgentStatusValue>('running'); // Start with running
   const [agentStatusMessage, setAgentStatusMessage] = useState('Agent is running smoothly (Simulated).');
 
+
   useEffect(() => {
-    getAppSettings().then(settings => {
-      if (settings.defaultTopic) {
-        setCurrentTopic(settings.defaultTopic);
-      }
-      if (settings.lineUserId) {
-        setCurrentLineUserId(settings.lineUserId);
-      }
-      if (settings.githubRepoUrl) {
-        setCurrentGithubRepoUrl(settings.githubRepoUrl);
-      }
-    });
+    if (!isLoadingAppSettings) {
+      setCurrentTopic(appSettings.defaultTopic || 'General AI');
+      setCurrentLineUserId(appSettings.lineUserId);
+      setCurrentGithubRepoUrl(appSettings.githubRepoUrl);
+    }
+  }, [appSettings, isLoadingAppSettings]);
+
+
+  useEffect(() => {
     if (typeof window !== 'undefined') {
       const savedItems = localStorage.getItem('discoveredContentItems');
       if (savedItems) {
@@ -86,7 +63,7 @@ export function DiscoveredContentSection() {
       { status: 'degraded', message: 'Agent experiencing some delays (Simulated).' },
       { status: 'offline', message: 'Agent is currently offline (Simulated).' },
     ];
-    let currentIndex = 0; // Start with running
+    let currentIndex = 0; 
     setAgentStatus(statuses[currentIndex].status);
     setAgentStatusMessage(statuses[currentIndex].message);
 
@@ -94,7 +71,7 @@ export function DiscoveredContentSection() {
       currentIndex = (currentIndex + 1) % statuses.length;
       setAgentStatus(statuses[currentIndex].status);
       setAgentStatusMessage(statuses[currentIndex].message);
-    }, 15000); // Change status every 15 seconds
+    }, 15000); 
 
     return () => clearInterval(intervalId);
   }, []);
@@ -198,6 +175,22 @@ export function DiscoveredContentSection() {
     toast({ title: 'Item Dismissed', description: 'The content item has been removed.'});
   };
 
+  if (isLoadingAppSettings) {
+     return (
+      <Card className="shadow-lg mt-8">
+        <CardHeader>
+          <CardTitle className="font-headline flex items-center gap-2">
+            <Search className="h-6 w-6 text-primary" />
+            Content Monitoring & Processing
+          </CardTitle>
+          <CardDescription>Loading settings...</CardDescription>
+        </CardHeader>
+        <CardContent>
+           <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className="shadow-lg mt-8">
