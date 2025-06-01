@@ -89,7 +89,7 @@ export async function processDiscoveredContent(
 
     if (result.title === "Content Fetch Failed" || result.title === "Content Extraction Failed") {
       finalStatus = 'error';
-      errorMessage = result.summary || result.progress; 
+      errorMessage = result.summary || result.progress;
     }
 
     const content: ProcessedContent = {
@@ -130,8 +130,6 @@ export async function processDiscoveredContent(
 
 
 // --- Settings ---
-// User preferences are saved to localStorage on the client-side.
-// Sensitive API keys should be set as environment variables on the server.
 const SettingsFormSchema = z.object({
   defaultTopic: z.string().optional(),
   lineUserId: z.string().optional(),
@@ -152,13 +150,10 @@ export async function saveSettings(prevState: SettingsFormState | undefined, for
 
   if (!validatedFields.success) {
     return {
-      errors: validatedFields.error.flatten().fieldErrors as any, // Cast to any due to Zod's complex error types
+      errors: validatedFields.error.flatten().fieldErrors as any,
       message: 'Validation Error: Please check your input.',
     };
   }
-
-  // These settings are intended to be saved in localStorage by the client.
-  // No server-side persistence for these specific fields in this action.
   console.log("User preferences received (to be saved by client):", validatedFields.data);
 
   return {
@@ -167,10 +162,113 @@ export async function saveSettings(prevState: SettingsFormState | undefined, for
   };
 }
 
-// --- Placeholder for LINE Bot action ---
-export async function sendToLineAction(content: ProcessedContent): Promise<{ message: string }> {
-  // This is a placeholder. Actual LINE Bot integration is complex.
-  // It would retrieve LINE_USER_ID from settings (localStorage via client) and LINE_CHANNEL_ACCESS_TOKEN from env vars.
-  console.log("Sending to LINE (simulated):", content);
-  return { message: `Content "${content.title}" sent to LINE (simulated).` };
+// --- LINE Bot action ---
+export async function sendToLineAction(
+  content: ProcessedContent,
+  lineUserId: string | undefined | null
+): Promise<{ success: boolean; message: string }> {
+  if (!lineUserId) {
+    return { success: false, message: 'LINE User ID not provided. Please configure it in Settings.' };
+  }
+
+  const lineChannelAccessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+  if (!lineChannelAccessToken) {
+    return { success: false, message: 'LINE Channel Access Token not configured on the server.' };
+  }
+
+  const flexMessage = {
+    type: 'flex',
+    altText: content.title || 'New Content Proposal',
+    contents: {
+      type: 'bubble',
+      header: {
+        type: 'box',
+        layout: 'vertical',
+        contents: [
+          {
+            type: 'text',
+            text: 'New Content Proposal',
+            weight: 'bold',
+            size: 'md',
+            color: '#FFFFFF',
+          },
+        ],
+        backgroundColor: '#00B900',
+        paddingAll: 'md',
+      },
+      hero: content.title ? { // Only add hero if there's a title that isn't a failure message
+        type: 'box',
+        layout: 'vertical',
+        contents: [
+           {
+            type: 'text',
+            text: content.title,
+            weight: 'bold',
+            size: 'xl',
+            wrap: true,
+            margin: 'md'
+          }
+        ],
+        paddingAll: 'md'
+      } : undefined,
+      body: {
+        type: 'box',
+        layout: 'vertical',
+        contents: [
+          {
+            type: 'text',
+            text: content.summary ? (content.summary.length > 100 ? content.summary.substring(0, 97) + '...' : content.summary) : 'No summary available.',
+            wrap: true,
+            size: 'sm',
+            margin: 'md',
+          },
+        ],
+        paddingAll: 'md',
+      },
+      footer: {
+        type: 'box',
+        layout: 'vertical',
+        spacing: 'sm',
+        contents: [
+          {
+            type: 'button',
+            style: 'link',
+            height: 'sm',
+            action: {
+              type: 'uri',
+              label: 'View Source',
+              uri: content.sourceUrl,
+            },
+          },
+        ],
+        flex: 0,
+        paddingAll: 'md',
+      },
+    },
+  };
+
+  try {
+    const response = await fetch('https://api.line.me/v2/bot/message/push', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${lineChannelAccessToken}`,
+      },
+      body: JSON.stringify({
+        to: lineUserId,
+        messages: [flexMessage],
+      }),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.json().catch(() => ({ message: 'Failed to parse error response from LINE API.' }));
+      console.error('LINE API Error:', response.status, errorBody);
+      return { success: false, message: `LINE API Error (${response.status}): ${errorBody.message || 'Unknown error'}` };
+    }
+
+    return { success: true, message: `Content "${content.title || 'proposal'}" sent to LINE successfully.` };
+  } catch (error: any) {
+    console.error('Error sending to LINE:', error);
+    return { success: false, message: `Failed to send to LINE: ${error.message}` };
+  }
 }

@@ -6,7 +6,7 @@
 - **Strategy Formulation**: When a user inputs a curriculum/topic, the AI suggests relevant search keywords, target websites, and content types to monitor. (Basic implementation complete)
 - **Content Discovery & Processing**: When a user adds a URL, the content is summarized, and tags are generated. (Basic implementation complete, uses local storage for discovered items, processing via AI flow, now with a Genkit tool for web fetching, basic progress display, and refined AI prompt for summarization with safety settings.)
 - **Settings**: Non-sensitive user preferences (default topic, LINE User ID, GitHub Repo URL) can be configured and are saved to `localStorage`. Sensitive API keys (Google AI, LINE, GitHub PAT) are managed via server-side environment variables. (UI updated, `saveSettings` action refined)
-- **Send to LINE**: There's a button to send processed content to LINE, but the actual API integration is a placeholder.
+- **Send to LINE**: Button exists. **Core logic to make API call to LINE with a Flex Message implemented in server action. Client-side logic to retrieve and pass `lineUserId` also implemented. Actual sending depends on valid server-side `LINE_CHANNEL_ACCESS_TOKEN` and client-side `lineUserId` configuration.**
 
 ## 📝 TODO List (English)
 
@@ -14,26 +14,25 @@
 
 - **[~] Implement Actual Settings Storage & Management**:
     - **[x] Server-Side Storage for Sensitive Keys**:
-        - **Clarification**: Sensitive API keys (OpenRouter - *removed as unused*, Google AI, LINE Channel Access Token/Secret, GitHub PAT) are to be managed via server-side environment variables (e.g., `.env` locally, Firebase App Hosting configuration for deployment). They are **not** to be set via the UI or stored in `localStorage`. The settings page UI has been updated to reflect this.
+        - **Clarification**: Sensitive API keys (Google AI, LINE Channel Access Token, GitHub PAT) are to be managed via server-side environment variables (e.g., `.env` locally, Firebase App Hosting configuration for deployment). They are **not** to be set via the UI or stored in `localStorage`. The settings page UI has been updated to reflect this.
         - **[ ]** (Future) Consider Google Secret Manager for more advanced secret management if needed.
     - **[ ] Database for Dynamic User Settings (Non-Sensitive)**:
         - For non-sensitive settings like `defaultTopic`, `githubRepoUrl`, `lineUserId` that users can change via the UI: currently, these are saved to `localStorage`.
         - **Future Enhancement**: If user authentication is added, or if these settings need to persist across browsers/devices for a user, migrate them to a persistent database (e.g., Firebase Firestore).
-    - **[~] Update `saveSettings` Server Action**:
+    - **[x] Update `saveSettings` Server Action**:
         - **Update**: The `saveSettings` action in `src/lib/actions.ts` now only handles non-sensitive preferences (`defaultTopic`, `lineUserId`, `githubRepoUrl`). It returns these to the client, which then saves them to `localStorage`.
         - **[ ]** (Future) If/when a database is used for these preferences, modify the action to write to the database.
 
-- **[ ] Implement Actual LINE Bot Integration**:
-    - **[ ] Implement `sendToLineAction` Logic**:
-        - In `src/lib/actions.ts`, replace the placeholder in `sendToLineAction` with actual LINE Messaging API calls.
-        - Use `fetch` or a suitable HTTP client library.
-        - Retrieve `lineChannelAccessToken` (from server environment variable) and `lineUserId` (from user settings, passed from client).
-    - **[ ] Design Rich Message Format**:
-        - Utilize LINE Flex Messages for a more engaging presentation of curated content (title, summary, source URL button, potentially a preview image).
-        - Construct the appropriate JSON payload for the chosen message type.
-    - **[ ] Robust Error Handling**:
-        - Handle API errors from LINE (e.g., invalid token, user not found, rate limits, message format errors).
-        - Provide clear feedback to the UI via the action's return state and toasts.
+- **[~] Implement Actual LINE Bot Integration**:
+    - **[x] Implement `sendToLineAction` Logic**:
+        - In `src/lib/actions.ts`, the placeholder in `sendToLineAction` has been replaced with actual LINE Messaging API calls using `fetch`.
+        - Retrieves `lineChannelAccessToken` (from server environment variable `process.env.LINE_CHANNEL_ACCESS_TOKEN`) and `lineUserId` (passed from client).
+    - **[x] Design Rich Message Format**:
+        - A basic LINE Flex Message is constructed to present curated content (title, summary, source URL button).
+    - **[~] Robust Error Handling**:
+        - Basic error handling for API calls from LINE implemented in the action.
+        - Client-side checks for `lineUserId` and feedback via toasts implemented.
+        - **[ ]** Further enhance server-side error handling (e.g., more specific error parsing from LINE API).
 
 - **[ ] Develop Content Auto-Monitoring Agent (Backend Process)**:
     - **[ ] Choose Agent Architecture**:
@@ -54,7 +53,7 @@
         - Save newly discovered and processed content items to a database (e.g., Firestore) so they can be displayed in the UI's "Discovered Content Section". This replaces the current `localStorage` approach for items found by the agent.
     - **[ ] Add Visual Status Indicator for Agent Health**:
         - Implement a way for the agent to report its operational status (e.g., running, error, stopped).
-        - Display this status in the UI (e.g., green/yellow/red light icon in the "Content Monitoring & Processing" section) by querying the agent's status from its storage location or a health endpoint.
+        - Display this status in the UI (e.g., green/yellow/red light icon in the "Content Monitoring & Processing" section) by querying the agent's status from its storage location or a health endpoint. (User Suggestion)
 
 - **[ ] Detail & Implement GitHub Integration Feature**:
     - **[ ] Define Content-to-Markdown Conversion**:
@@ -98,8 +97,8 @@
 - **[x] Detailed Loading State Indication**:
     - **[x]** For AI flows and other long-running actions (content processing), provide more granular progress feedback. (Basic implementation for content processing done, leveraging AI flow's progress field and refined server action logic).
     - **[ ]** Extend to strategy formulation and future publishing actions.
-- **[ ] Strengthen User Feedback and Notifications**:
-    - Continue consistent and informative use of `useToast` for all user actions (success, failure, warnings).
+- **[~] Strengthen User Feedback and Notifications**:
+    - Continue consistent and informative use of `useToast` for all user actions (success, failure, warnings). (Improved for LINE sending)
 - **[ ] Improve Input Validation Messages**:
     - Make Zod validation error messages more user-friendly in forms.
     - Consider adding client-side validation for quicker feedback, in addition to server-side validation.
@@ -109,10 +108,10 @@
 
 ### Technical Debt & Code Quality
 
-- **[ ] Overall Error Handling Enhancement**:
+- **[~] Overall Error Handling Enhancement**:
     - Implement comprehensive error handling across:
         - Client components (React Error Boundaries for sections).
-        - Server Actions (return clear error states, especially for catastrophic AI flow failures - improved for `generateContentSummary`).
+        - Server Actions (return clear error states, especially for catastrophic AI flow failures - improved for `generateContentSummary` and `sendToLineAction`).
         - AI Flows (graceful failure and error reporting - improved for `generateContentSummary`).
         - Future Monitoring Agent (robust logging and error recovery).
 - **[ ] Write Test Code**:
@@ -129,7 +128,7 @@
 - **[ ] Detail `apphosting.yaml` Configuration**:
     - Review and optimize resource settings (CPU, memory, min/max instances) for the production environment, especially considering the potential load from the auto-monitoring agent.
 - **[x] Environment Variable Management Strategy**:
-    - **Clarification**: Sensitive API keys (Google AI, etc.) must be managed via environment variables (e.g., `.env` locally, platform-specific settings for App Hosting). The Settings UI now directs users accordingly. Non-sensitive user preferences use `localStorage`.
+    - **Clarification**: Sensitive API keys (Google AI, LINE_CHANNEL_ACCESS_TOKEN etc.) must be managed via environment variables (e.g., `.env` locally, platform-specific settings for App Hosting). The Settings UI now directs users accordingly. Non-sensitive user preferences use `localStorage`.
 - **[ ] Logging and Monitoring Strategy**:
     - Enhance server-side logging for server actions and AI flow executions (Genkit has logging capabilities).
     - Set up alerts in Cloud Monitoring (if using Google Cloud) for error rates or performance degradation.
@@ -147,6 +146,7 @@
 - **Implemented basic detailed loading state indication for content processing by leveraging AI flow's progress output.**
 - **Refined `generateContentSummary` prompt for better handling of HTML extraction and progress reporting, and added initial Gemini safety settings.**
 - **Refactored Settings page to manage only non-sensitive user preferences in `localStorage`; sensitive API keys are now expected as server-side environment variables.**
+- **[~] Implemented core logic for `sendToLineAction` to make API calls to LINE with a basic Flex Message. Client-side updated to pass `lineUserId`.**
 
 ---
 

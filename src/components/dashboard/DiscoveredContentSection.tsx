@@ -13,20 +13,21 @@ import { PlusCircle, Search, Bot, AlertTriangle, Info } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs
 
-// Mock function to simulate fetching settings. In a real app, this would come from a store or API.
 async function getAppSettings(): Promise<Partial<AppSettings>> {
-  // Simulate API call
   return new Promise(resolve => {
     setTimeout(() => {
-      // Try to load from localStorage, or use defaults
       if (typeof window !== 'undefined') {
         const storedSettings = localStorage.getItem('contentCuratorAppSettings');
         if (storedSettings) {
-          resolve(JSON.parse(storedSettings));
-          return;
+          try {
+            resolve(JSON.parse(storedSettings));
+            return;
+          } catch (e) {
+            console.error("Failed to parse settings from localStorage", e);
+          }
         }
       }
-      resolve({ defaultTopic: 'General AI' });
+      resolve({ defaultTopic: 'General AI', lineUserId: undefined });
     }, 100);
   });
 }
@@ -36,28 +37,34 @@ export function DiscoveredContentSection() {
   const [discoveredItems, setDiscoveredItems] = useState<ProcessedContent[]>([]);
   const [newUrl, setNewUrl] = useState('');
   const [currentTopic, setCurrentTopic] = useState('General Tech');
+  const [currentLineUserId, setCurrentLineUserId] = useState<string | undefined>(undefined);
   const [processingItemId, setProcessingItemId] = useState<string | null>(null);
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
-    // Load settings, specifically defaultTopic
     getAppSettings().then(settings => {
       if (settings.defaultTopic) {
         setCurrentTopic(settings.defaultTopic);
       }
+      if (settings.lineUserId) {
+        setCurrentLineUserId(settings.lineUserId);
+      }
     });
-    // Load items from localStorage
     if (typeof window !== 'undefined') {
       const savedItems = localStorage.getItem('discoveredContentItems');
       if (savedItems) {
-        setDiscoveredItems(JSON.parse(savedItems));
+        try {
+          setDiscoveredItems(JSON.parse(savedItems));
+        } catch (e) {
+            console.error("Failed to parse discovered items from localStorage", e);
+            localStorage.removeItem('discoveredContentItems');
+        }
       }
     }
   }, []);
 
   useEffect(() => {
-    // Save items to localStorage whenever they change
     if (typeof window !== 'undefined') {
       localStorage.setItem('discoveredContentItems', JSON.stringify(discoveredItems));
     }
@@ -70,7 +77,6 @@ export function DiscoveredContentSection() {
       return;
     }
     try {
-      // Basic URL validation
       new URL(newUrl);
     } catch (_) {
       toast({ title: 'Error', description: 'Invalid URL format.', variant: 'destructive' });
@@ -93,8 +99,6 @@ export function DiscoveredContentSection() {
     startTransition(async () => {
       const result = await processDiscoveredContent(articleId, articleUrl, currentTopic);
       if (result.processedContent) {
-        // The result.processedContent contains the final status ('processed' or 'error')
-        // and any messages (progressMessage, errorMessage) from the AI flow or action.
         setDiscoveredItems(prev => prev.map(item => item.id === articleId ? { ...result.processedContent! } : item));
         toast({
           title: result.processedContent.status === 'processed' ? 'Success' : 'Processing Issue',
@@ -102,7 +106,6 @@ export function DiscoveredContentSection() {
           variant: result.processedContent.status === 'error' ? 'destructive' : 'default',
         });
       } else {
-        // This case handles if processDiscoveredContent itself throws an error or returns an error string directly.
         setDiscoveredItems(prev => prev.map(item => item.id === articleId ? { ...item, status: 'error', errorMessage: result.error, progressMessage: 'Processing failed catastrophically.' } : item));
         toast({ title: 'Error Processing', description: result.error, variant: 'destructive' });
       }
@@ -111,11 +114,22 @@ export function DiscoveredContentSection() {
   };
 
   const handleSendToLine = (content: ProcessedContent) => {
+    if (!currentLineUserId) {
+      toast({
+        title: 'LINE User ID Missing',
+        description: 'Please set your LINE User ID in the Settings page before sending content.',
+        variant: 'destructive',
+      });
+      return;
+    }
     startTransition(async () => {
-      // Simulate sending to LINE
-      const result = await sendToLineAction(content);
-      setDiscoveredItems(prev => prev.map(item => item.id === content.id ? {...item, status: 'sentToLine'} : item));
-      toast({ title: 'Sent to LINE', description: result.message });
+      const result = await sendToLineAction(content, currentLineUserId);
+      if (result.success) {
+        setDiscoveredItems(prev => prev.map(item => item.id === content.id ? {...item, status: 'sentToLine'} : item));
+        toast({ title: 'Sent to LINE', description: result.message });
+      } else {
+        toast({ title: 'LINE Error', description: result.message, variant: 'destructive' });
+      }
     });
   };
 

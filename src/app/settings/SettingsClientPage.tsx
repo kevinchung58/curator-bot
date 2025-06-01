@@ -41,7 +41,6 @@ export function SettingsClientPage() {
       if (storedSettings) {
         try {
           const parsedSettings = JSON.parse(storedSettings);
-          // Ensure only expected keys are loaded
           const validKeys: (keyof AppSettings)[] = ['defaultTopic', 'lineUserId', 'githubRepoUrl'];
           const filteredSettings: Partial<AppSettings> = {};
           validKeys.forEach(key => {
@@ -52,7 +51,7 @@ export function SettingsClientPage() {
           setCurrentSettings(filteredSettings);
         } catch (e) {
           console.error("Failed to parse settings from localStorage", e);
-          localStorage.removeItem('contentCuratorAppSettings'); // Clear potentially corrupted settings
+          localStorage.removeItem('contentCuratorAppSettings');
         }
       }
     }
@@ -66,7 +65,7 @@ export function SettingsClientPage() {
          toast({ title: "Settings Updated", description: state.message });
          if (typeof window !== 'undefined') {
            localStorage.setItem('contentCuratorAppSettings', JSON.stringify(state.settings));
-           setCurrentSettings(state.settings); 
+           setCurrentSettings(state.settings);
          }
       } else {
         toast({ title: "Info", description: state.message });
@@ -98,8 +97,8 @@ export function SettingsClientPage() {
               For the application to function correctly with AI features and integrations, ensure the following server-side environment variables are set:
               <ul className="list-disc list-inside mt-1 text-xs">
                 <li><code className="font-mono bg-muted px-1 py-0.5 rounded">GOOGLE_API_KEY</code>: For Google AI (Gemini) features.</li>
-                <li>(Future) <code className="font-mono bg-muted px-1 py-0.5 rounded">LINE_CHANNEL_ACCESS_TOKEN</code>: For LINE integration.</li>
-                <li>(Future) <code className="font-mono bg-muted px-1 py-0.5 rounded">LINE_CHANNEL_SECRET</code>: For LINE integration.</li>
+                <li><code className="font-mono bg-muted px-1 py-0.5 rounded">LINE_CHANNEL_ACCESS_TOKEN</code>: For LINE integration.</li>
+                <li>(Future) <code className="font-mono bg-muted px-1 py-0.5 rounded">LINE_CHANNEL_SECRET</code>: For LINE integration (might be needed for some webhook verifications).</li>
                 <li>(Future) <code className="font-mono bg-muted px-1 py-0.5 rounded">GITHUB_PAT</code>: For publishing to GitHub.</li>
               </ul>
               These keys are not managed through this UI for security reasons.
