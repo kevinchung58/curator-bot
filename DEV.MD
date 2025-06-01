@@ -7,7 +7,7 @@
 - **Content Discovery & Processing**: When a user adds a URL, the content is summarized, and tags are generated. (Basic implementation complete, uses local storage for discovered items, processing via AI flow, now with a Genkit tool for web fetching, basic progress display, and refined AI prompt for summarization with safety settings and few-shot examples.)
 - **Settings**: Non-sensitive user preferences (default topic, LINE User ID, GitHub Repo URL) can be configured and are saved to `localStorage`. Sensitive API keys (Google AI, LINE, GitHub PAT) are managed via server-side environment variables. (UI updated, `saveSettings` action refined)
 - **Send to LINE**: Button exists. Core logic to make API call to LINE with a Flex Message implemented in server action. Client-side logic to retrieve and pass `lineUserId` also implemented. Actual sending depends on valid server-side `LINE_CHANNEL_ACCESS_TOKEN` and client-side `lineUserId` configuration. Server-side error parsing from LINE API enhanced.
-- **Publish to GitHub**: Button exists for processed content. Calls a server action that now generates Markdown for the content and **creates/updates files in the specified GitHub repository using Octokit**. Client-side logic retrieves `githubRepoUrl` and handles success/failure toasts. `GITHUB_PAT` environment variable is required.
+- **Publish to GitHub**: Button exists for processed content. Calls a server action that now generates Markdown for the content and creates/updates files in the specified GitHub repository using Octokit. Client-side logic retrieves `githubRepoUrl` and handles success/failure toasts. `GITHUB_PAT` environment variable is required.
 
 ## 📝 TODO List (English)
 
@@ -105,7 +105,8 @@
 
 - **[x] Detailed Loading State Indication**:
     - **[x]** For AI flows and other long-running actions (content processing), provide more granular progress feedback. (Basic implementation for content processing done, leveraging AI flow's progress field and refined server action logic).
-    - **[ ]** Extend to strategy formulation and future publishing actions.
+    - **[x]** Extend to strategy formulation (reviewed and deemed sufficient with current spinner).
+    - **[x]** Extend to publishing actions and other card actions (Process, Send to LINE, Publish to GitHub buttons in `ContentCard` now have specific loading spinners).
 - **[x] Strengthen User Feedback and Notifications**:
     - Continue consistent and informative use of `useToast` for all user actions (success, failure, warnings). (Improved for LINE sending and GitHub publishing simulation)
 - **[ ] Improve Input Validation Messages**:
@@ -163,6 +164,9 @@
 - **Cleaned up a redundant global font-family CSS rule.**
 - **Defined content-to-Markdown conversion logic within `publishToGithubAction`.**
 - **Implemented actual file creation/update in GitHub using Octokit within `publishToGithubAction`.**
+- **Added UI placeholder for simulated agent status in `DiscoveredContentSection`.**
+- **Enhanced `publishToGithubAction` to correctly handle updating existing files.**
+- **Improved loading state indication for action buttons in `ContentCard` with per-button spinners.**
 
 ---
 

@@ -15,11 +15,26 @@ type ContentCardProps = {
   onSendToLine: (content: ProcessedContent) => void;
   onPublishToGithub: (content: ProcessedContent) => void;
   onDismiss: (articleId: string) => void;
-  isProcessing: boolean;
+  isProcessingThisCard: boolean;
+  isSendingThisCard: boolean;
+  isPublishingThisCard: boolean;
+  isTransitionGlobalPending: boolean;
   defaultTopic: string;
 };
 
-export function ContentCard({ content, onProcess, onSendToLine, onPublishToGithub, onDismiss, isProcessing, defaultTopic }: ContentCardProps) {
+export function ContentCard({ 
+  content, 
+  onProcess, 
+  onSendToLine, 
+  onPublishToGithub, 
+  onDismiss, 
+  isProcessingThisCard,
+  isSendingThisCard,
+  isPublishingThisCard,
+  isTransitionGlobalPending,
+  defaultTopic 
+}: ContentCardProps) {
+  
   const handleProcess = () => {
     if (content.status === 'new' || content.status === 'error') {
       onProcess(content.id, content.sourceUrl);
@@ -42,10 +57,14 @@ export function ContentCard({ content, onProcess, onSendToLine, onPublishToGithu
     onDismiss(content.id);
   }
 
+  const showProcessSpinner = isProcessingThisCard && isTransitionGlobalPending;
+  const showSendSpinner = isSendingThisCard && isTransitionGlobalPending;
+  const showPublishSpinner = isPublishingThisCard && isTransitionGlobalPending;
+
   return (
     <Card className="shadow-md hover:shadow-lg transition-shadow duration-300 flex flex-col h-full">
       <CardHeader>
-        {content.status === 'processed' && content.title && content.title !== "Content Fetch Failed" ? (
+        {content.status === 'processed' && content.title && content.title !== "Content Fetch Failed" && content.title !== "Content Extraction Failed" && content.title !== "AI System Error" ? (
           <CardTitle className="font-headline text-xl">{content.title}</CardTitle>
         ) : (
           <CardTitle className="font-headline text-xl truncate" title={content.sourceUrl.length > 50 ? content.sourceUrl : undefined}>
@@ -91,40 +110,34 @@ export function ContentCard({ content, onProcess, onSendToLine, onPublishToGithu
          {content.status === 'publishedToGithub' && (
            <div className="flex items-center text-purple-600">
              <Github className="h-5 w-5 mr-2" />
-             <p>{content.progressMessage || 'Content (simulated) published to GitHub.'}</p>
+             <p>{content.progressMessage || 'Content published to GitHub.'}</p>
            </div>
         )}
       </CardContent>
       <CardFooter className="flex flex-col sm:flex-row gap-2 justify-end pt-4 border-t flex-wrap">
         {(content.status === 'new' || content.status === 'error') && (
-          <Button onClick={handleProcess} disabled={isProcessing && content.id === (window as any).processingItemIdForButton} variant="outline" size="sm">
-            {isProcessing && content.id === (window as any).processingItemIdForButton ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+          <Button onClick={handleProcess} disabled={isTransitionGlobalPending} variant="outline" size="sm">
+            {showProcessSpinner ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
             Process Content
           </Button>
         )}
         {content.status === 'processed' && (
           <>
-            <Button onClick={handleSendToLine} variant="default" size="sm" className="bg-green-600 hover:bg-green-700 text-white">
-              <Send className="mr-2 h-4 w-4" />
+            <Button onClick={handleSendToLine} disabled={isTransitionGlobalPending} variant="default" size="sm" className="bg-green-600 hover:bg-green-700 text-white">
+              {showSendSpinner ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
               Send to LINE
             </Button>
-            <Button onClick={handlePublishToGithub} variant="outline" size="sm" className="border-purple-500 text-purple-600 hover:bg-purple-50 hover:text-purple-700">
-              <Github className="mr-2 h-4 w-4" />
+            <Button onClick={handlePublishToGithub} disabled={isTransitionGlobalPending} variant="outline" size="sm" className="border-purple-500 text-purple-600 hover:bg-purple-50 hover:text-purple-700">
+              {showPublishSpinner ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Github className="mr-2 h-4 w-4" />}
               Publish to GitHub
             </Button>
           </>
         )}
-         <Button onClick={handleDismiss} variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive">
+         <Button onClick={handleDismiss} variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive" disabled={isTransitionGlobalPending}>
             <Trash2 className="mr-2 h-4 w-4" />
             Dismiss
         </Button>
       </CardFooter>
     </Card>
   );
-}
-// Helper to potentially sync isProcessing state for button spinner if needed,
-// though the direct prop `isProcessing` should generally cover it.
-// This is a bit of a hack and might not be necessary if prop drilling is correct.
-if (typeof window !== 'undefined') {
-  (window as any).processingItemIdForButton = null;
 }

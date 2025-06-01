@@ -44,9 +44,13 @@ export function DiscoveredContentSection() {
   const [currentTopic, setCurrentTopic] = useState('General Tech');
   const [currentLineUserId, setCurrentLineUserId] = useState<string | undefined>(undefined);
   const [currentGithubRepoUrl, setCurrentGithubRepoUrl] = useState<string | undefined>(undefined);
+  
   const [processingItemId, setProcessingItemId] = useState<string | null>(null);
+  const [sendingItemId, setSendingItemId] = useState<string | null>(null);
+  const [publishingItemId, setPublishingItemId] = useState<string | null>(null);
+  
   const { toast } = useToast();
-  const [isPending, startTransition] = useTransition();
+  const [isTransitionGlobalPending, startTransition] = useTransition();
 
   type AgentStatusValue = 'running' | 'degraded' | 'offline' | 'unknown';
   const [agentStatus, setAgentStatus] = useState<AgentStatusValue>('running');
@@ -125,7 +129,6 @@ export function DiscoveredContentSection() {
 
   const handleProcessContent = (articleId: string, articleUrl: string) => {
     setProcessingItemId(articleId);
-    if (typeof window !== 'undefined') { (window as any).processingItemIdForButton = articleId; }
     setDiscoveredItems(prev => prev.map(item => item.id === articleId ? { ...item, status: 'processing', progressMessage: 'Initiating content processing...' } : item));
 
     startTransition(async () => {
@@ -142,7 +145,6 @@ export function DiscoveredContentSection() {
         toast({ title: 'Error Processing', description: result.error, variant: 'destructive' });
       }
       setProcessingItemId(null);
-      if (typeof window !== 'undefined') { (window as any).processingItemIdForButton = null; }
     });
   };
 
@@ -155,6 +157,7 @@ export function DiscoveredContentSection() {
       });
       return;
     }
+    setSendingItemId(content.id);
     startTransition(async () => {
       const result = await sendToLineAction(content, currentLineUserId);
       if (result.success) {
@@ -163,6 +166,7 @@ export function DiscoveredContentSection() {
       } else {
         toast({ title: 'LINE Error', description: result.message, variant: 'destructive' });
       }
+      setSendingItemId(null);
     });
   };
 
@@ -175,6 +179,7 @@ export function DiscoveredContentSection() {
       });
       return;
     }
+    setPublishingItemId(content.id);
     startTransition(async () => {
       const result = await publishToGithubAction(content, currentGithubRepoUrl);
       if (result.success) {
@@ -183,6 +188,7 @@ export function DiscoveredContentSection() {
       } else {
         toast({ title: 'GitHub Publish Error', description: result.message, variant: 'destructive' });
       }
+      setPublishingItemId(null);
     });
   };
 
@@ -224,7 +230,7 @@ export function DiscoveredContentSection() {
               className="mt-1 text-base"
             />
           </div>
-          <Button onClick={handleAddUrl} className="w-full sm:w-auto">
+          <Button onClick={handleAddUrl} className="w-full sm:w-auto" disabled={isTransitionGlobalPending}>
             <PlusCircle className="mr-2 h-4 w-4" />
             Add URL
           </Button>
@@ -248,7 +254,10 @@ export function DiscoveredContentSection() {
                   onSendToLine={handleSendToLine}
                   onPublishToGithub={handlePublishToGithub}
                   onDismiss={handleDismissItem}
-                  isProcessing={processingItemId === item.id || isPending}
+                  isProcessingThisCard={processingItemId === item.id}
+                  isSendingThisCard={sendingItemId === item.id}
+                  isPublishingThisCard={publishingItemId === item.id}
+                  isTransitionGlobalPending={isTransitionGlobalPending}
                   defaultTopic={currentTopic}
                 />
               ))}
