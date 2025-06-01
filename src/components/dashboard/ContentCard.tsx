@@ -5,7 +5,7 @@ import type { ProcessedContent } from '@/lib/definitions';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ExternalLink, Loader2, Send, AlertCircle, CheckCircle2, Trash2 } from 'lucide-react';
+import { ExternalLink, Loader2, Send, AlertCircle, CheckCircle2, Trash2, Github } from 'lucide-react';
 import Link from 'next/link';
 import React from 'react';
 
@@ -13,12 +13,13 @@ type ContentCardProps = {
   content: ProcessedContent;
   onProcess: (articleId: string, articleUrl: string) => void;
   onSendToLine: (content: ProcessedContent) => void;
+  onPublishToGithub: (content: ProcessedContent) => void;
   onDismiss: (articleId: string) => void;
   isProcessing: boolean;
   defaultTopic: string;
 };
 
-export function ContentCard({ content, onProcess, onSendToLine, onDismiss, isProcessing, defaultTopic }: ContentCardProps) {
+export function ContentCard({ content, onProcess, onSendToLine, onPublishToGithub, onDismiss, isProcessing, defaultTopic }: ContentCardProps) {
   const handleProcess = () => {
     if (content.status === 'new' || content.status === 'error') {
       onProcess(content.id, content.sourceUrl);
@@ -28,6 +29,12 @@ export function ContentCard({ content, onProcess, onSendToLine, onDismiss, isPro
   const handleSendToLine = () => {
     if (content.status === 'processed') {
       onSendToLine(content);
+    }
+  }
+
+  const handlePublishToGithub = () => {
+    if (content.status === 'processed') {
+      onPublishToGithub(content);
     }
   }
 
@@ -81,19 +88,31 @@ export function ContentCard({ content, onProcess, onSendToLine, onDismiss, isPro
              <p>Content proposal sent to LINE.</p>
            </div>
         )}
+         {content.status === 'publishedToGithub' && (
+           <div className="flex items-center text-purple-600">
+             <Github className="h-5 w-5 mr-2" />
+             <p>{content.progressMessage || 'Content (simulated) published to GitHub.'}</p>
+           </div>
+        )}
       </CardContent>
-      <CardFooter className="flex flex-col sm:flex-row gap-2 justify-end pt-4 border-t">
+      <CardFooter className="flex flex-col sm:flex-row gap-2 justify-end pt-4 border-t flex-wrap">
         {(content.status === 'new' || content.status === 'error') && (
-          <Button onClick={handleProcess} disabled={isProcessing} variant="outline" size="sm">
+          <Button onClick={handleProcess} disabled={isProcessing && content.id === (window as any).processingItemIdForButton} variant="outline" size="sm">
             {isProcessing && content.id === (window as any).processingItemIdForButton ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
             Process Content
           </Button>
         )}
         {content.status === 'processed' && (
-          <Button onClick={handleSendToLine} variant="default" size="sm" className="bg-green-600 hover:bg-green-700 text-white">
-            <Send className="mr-2 h-4 w-4" />
-            Send to LINE
-          </Button>
+          <>
+            <Button onClick={handleSendToLine} variant="default" size="sm" className="bg-green-600 hover:bg-green-700 text-white">
+              <Send className="mr-2 h-4 w-4" />
+              Send to LINE
+            </Button>
+            <Button onClick={handlePublishToGithub} variant="outline" size="sm" className="border-purple-500 text-purple-600 hover:bg-purple-50 hover:text-purple-700">
+              <Github className="mr-2 h-4 w-4" />
+              Publish to GitHub
+            </Button>
+          </>
         )}
          <Button onClick={handleDismiss} variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive">
             <Trash2 className="mr-2 h-4 w-4" />

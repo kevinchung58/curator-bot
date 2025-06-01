@@ -6,10 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import { processDiscoveredContent, sendToLineAction } from '@/lib/actions';
+import { processDiscoveredContent, sendToLineAction, publishToGithubAction } from '@/lib/actions';
 import type { ProcessedContent, AppSettings } from '@/lib/definitions';
 import { ContentCard } from './ContentCard';
-import { PlusCircle, Search, Bot, AlertTriangle, Info } from 'lucide-react';
+import { PlusCircle, Search, Bot, AlertTriangle, Info, Github } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs
 
@@ -20,14 +20,19 @@ async function getAppSettings(): Promise<Partial<AppSettings>> {
         const storedSettings = localStorage.getItem('contentCuratorAppSettings');
         if (storedSettings) {
           try {
-            resolve(JSON.parse(storedSettings));
+            const parsedSettings = JSON.parse(storedSettings) as AppSettings;
+            resolve({
+              defaultTopic: parsedSettings.defaultTopic || 'General AI',
+              lineUserId: parsedSettings.lineUserId,
+              githubRepoUrl: parsedSettings.githubRepoUrl
+            });
             return;
           } catch (e) {
             console.error("Failed to parse settings from localStorage", e);
           }
         }
       }
-      resolve({ defaultTopic: 'General AI', lineUserId: undefined });
+      resolve({ defaultTopic: 'General AI', lineUserId: undefined, githubRepoUrl: undefined });
     }, 100);
   });
 }
@@ -38,6 +43,7 @@ export function DiscoveredContentSection() {
   const [newUrl, setNewUrl] = useState('');
   const [currentTopic, setCurrentTopic] = useState('General Tech');
   const [currentLineUserId, setCurrentLineUserId] = useState<string | undefined>(undefined);
+  const [currentGithubRepoUrl, setCurrentGithubRepoUrl] = useState<string | undefined>(undefined);
   const [processingItemId, setProcessingItemId] = useState<string | null>(null);
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
@@ -49,6 +55,9 @@ export function DiscoveredContentSection() {
       }
       if (settings.lineUserId) {
         setCurrentLineUserId(settings.lineUserId);
+      }
+      if (settings.githubRepoUrl) {
+        setCurrentGithubRepoUrl(settings.githubRepoUrl);
       }
     });
     if (typeof window !== 'undefined') {
@@ -94,6 +103,7 @@ export function DiscoveredContentSection() {
 
   const handleProcessContent = (articleId: string, articleUrl: string) => {
     setProcessingItemId(articleId);
+    if (typeof window !== 'undefined') { (window as any).processingItemIdForButton = articleId; }
     setDiscoveredItems(prev => prev.map(item => item.id === articleId ? { ...item, status: 'processing', progressMessage: 'Initiating content processing...' } : item));
 
     startTransition(async () => {
@@ -110,6 +120,7 @@ export function DiscoveredContentSection() {
         toast({ title: 'Error Processing', description: result.error, variant: 'destructive' });
       }
       setProcessingItemId(null);
+      if (typeof window !== 'undefined') { (window as any).processingItemIdForButton = null; }
     });
   };
 
@@ -132,6 +143,27 @@ export function DiscoveredContentSection() {
       }
     });
   };
+
+  const handlePublishToGithub = (content: ProcessedContent) => {
+    if (!currentGithubRepoUrl) {
+      toast({
+        title: 'GitHub Repo URL Missing',
+        description: 'Please set your GitHub Repository URL in the Settings page before publishing.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    startTransition(async () => {
+      const result = await publishToGithubAction(content, currentGithubRepoUrl);
+      if (result.success) {
+        setDiscoveredItems(prev => prev.map(item => item.id === content.id ? {...item, status: 'publishedToGithub', progressMessage: result.message } : item));
+        toast({ title: 'Published to GitHub (Simulated)', description: result.message });
+      } else {
+        toast({ title: 'GitHub Publish Error', description: result.message, variant: 'destructive' });
+      }
+    });
+  };
+
 
   const handleDismissItem = (articleId: string) => {
     setDiscoveredItems(prev => prev.filter(item => item.id !== articleId));
@@ -185,6 +217,7 @@ export function DiscoveredContentSection() {
                   content={item}
                   onProcess={handleProcessContent}
                   onSendToLine={handleSendToLine}
+                  onPublishToGithub={handlePublishToGithub}
                   onDismiss={handleDismissItem}
                   isProcessing={processingItemId === item.id || isPending}
                   defaultTopic={currentTopic}

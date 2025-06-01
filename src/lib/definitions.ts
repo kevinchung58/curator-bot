@@ -11,7 +11,7 @@ export type ProcessedContent = {
   summary: string;
   tags: string[];
   sourceUrl: string;
-  status: 'new' | 'processing' | 'processed' | 'error' | 'sentToLine';
+  status: 'new' | 'processing' | 'processed' | 'error' | 'sentToLine' | 'publishedToGithub';
   progressMessage?: string;
   errorMessage?: string;
 };

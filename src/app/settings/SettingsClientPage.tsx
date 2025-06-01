@@ -98,8 +98,8 @@ export function SettingsClientPage() {
               <ul className="list-disc list-inside mt-1 text-xs">
                 <li><code className="font-mono bg-muted px-1 py-0.5 rounded">GOOGLE_API_KEY</code>: For Google AI (Gemini) features.</li>
                 <li><code className="font-mono bg-muted px-1 py-0.5 rounded">LINE_CHANNEL_ACCESS_TOKEN</code>: For LINE integration.</li>
+                <li><code className="font-mono bg-muted px-1 py-0.5 rounded">GITHUB_PAT</code>: For publishing to GitHub.</li>
                 <li>(Future) <code className="font-mono bg-muted px-1 py-0.5 rounded">LINE_CHANNEL_SECRET</code>: For LINE integration (might be needed for some webhook verifications).</li>
-                <li>(Future) <code className="font-mono bg-muted px-1 py-0.5 rounded">GITHUB_PAT</code>: For publishing to GitHub.</li>
               </ul>
               These keys are not managed through this UI for security reasons.
             </AlertDescription>
