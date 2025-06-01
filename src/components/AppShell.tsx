@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -16,10 +17,8 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar';
 import { SiteHeader } from '@/components/SiteHeader';
-import { Logo } from '@/components/icons/Logo';
+import { BotMessageSquare, Home, Settings } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Button } from '@/components/ui/button';
-import { Home, Settings, BotMessageSquare, BookOpenCheck } from 'lucide-react';
 import React from 'react';
 
 const navItems = [
@@ -29,32 +28,30 @@ const navItems = [
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const [mounted, setMounted] = React.useState(false);
+  const [isClient, setIsClient] = React.useState(false);
+  // For SSR and initial client render before cookie is checked, assume 'true'.
+  // This value will be updated *before* SidebarProvider is rendered on the client.
+  const [initialSidebarStateFromCookie, setInitialSidebarStateFromCookie] = React.useState(true); 
 
   React.useEffect(() => {
-    setMounted(true);
-  }, []);
-  
-  // Read sidebar state from cookie
-  const [defaultOpen, setDefaultOpen] = React.useState(true);
-  React.useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const storedState = document.cookie
-        .split('; ')
-        .find(row => row.startsWith('sidebar_state='))
-        ?.split('=')[1];
-      if (storedState) {
-        setDefaultOpen(storedState === 'true');
-      }
+    // This effect runs only on the client.
+    const storedState = document.cookie
+      .split('; ')
+      .find(row => row.startsWith('sidebar_state='))
+      ?.split('=')[1];
+    if (storedState) {
+      setInitialSidebarStateFromCookie(storedState === 'true');
     }
-  }, []);
+    // After determining the sidebar state from cookie (or using default), mark as client-rendered.
+    setIsClient(true); 
+  }, []); // Empty dependency array: runs once on mount.
 
-
-  if (!mounted) {
-    // Render skeleton or loading state on server/initial client render to avoid hydration mismatch
+  if (!isClient) {
+    // Server-Side Rendering or initial client render before useEffect completes.
+    // Render a skeleton that matches the assumed initial state (sidebar open).
     return (
       <div className="flex min-h-svh w-full">
-        <div className="hidden md:block w-[16rem] bg-muted p-4">
+        <div className="hidden md:block w-[16rem] bg-muted p-4"> {/* Corresponds to open sidebar */}
           <div className="flex items-center gap-2 mb-4">
              <BotMessageSquare className="h-8 w-8 text-primary" />
             <span className="font-headline text-xl">Curator Bot</span>
@@ -72,8 +69,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     );
   }
   
+  // Now isClient is true, and initialSidebarStateFromCookie is set.
+  // SidebarProvider will receive the cookie-derived state from its first render on the client.
   return (
-    <SidebarProvider defaultOpen={defaultOpen} collapsible="icon">
+    <SidebarProvider defaultOpen={initialSidebarStateFromCookie} collapsible="icon">
       <Sidebar_ variant="sidebar" side="left">
         <SidebarHeader className="border-b border-sidebar-border">
           <Link href="/" className="flex items-center gap-2 text-lg font-semibold md:text-base text-sidebar-foreground hover:text-sidebar-primary transition-colors">
