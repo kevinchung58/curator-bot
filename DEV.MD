@@ -6,7 +6,7 @@
 - **Strategy Formulation**: When a user inputs a curriculum/topic, the AI suggests relevant search keywords, target websites, and content types to monitor. (Basic implementation complete, prompt refined for schema adherence)
 - **Content Discovery & Processing**: When a user adds a URL, the content is summarized, and tags are generated. (Basic implementation complete, uses local storage for discovered items, processing via AI flow, now with a Genkit tool for web fetching, basic progress display, and refined AI prompt for summarization with safety settings.)
 - **Settings**: Non-sensitive user preferences (default topic, LINE User ID, GitHub Repo URL) can be configured and are saved to `localStorage`. Sensitive API keys (Google AI, LINE, GitHub PAT) are managed via server-side environment variables. (UI updated, `saveSettings` action refined)
-- **Send to LINE**: Button exists. **Core logic to make API call to LINE with a Flex Message implemented in server action. Client-side logic to retrieve and pass `lineUserId` also implemented. Actual sending depends on valid server-side `LINE_CHANNEL_ACCESS_TOKEN` and client-side `lineUserId` configuration.**
+- **Send to LINE**: Button exists. **Core logic to make API call to LINE with a Flex Message implemented in server action. Client-side logic to retrieve and pass `lineUserId` also implemented. Actual sending depends on valid server-side `LINE_CHANNEL_ACCESS_TOKEN` and client-side `lineUserId` configuration. Server-side error parsing from LINE API enhanced.**
 
 ## 📝 TODO List (English)
 
@@ -29,10 +29,10 @@
         - Retrieves `lineChannelAccessToken` (from server environment variable `process.env.LINE_CHANNEL_ACCESS_TOKEN`) and `lineUserId` (passed from client).
     - **[x] Design Rich Message Format**:
         - A basic LINE Flex Message is constructed to present curated content (title, summary, source URL button).
-    - **[~] Robust Error Handling**:
+    - **[x] Robust Error Handling**:
         - Basic error handling for API calls from LINE implemented in the action.
         - Client-side checks for `lineUserId` and feedback via toasts implemented.
-        - **[ ]** Further enhance server-side error handling (e.g., more specific error parsing from LINE API).
+        - **[x]** Further enhance server-side error handling (e.g., more specific error parsing from LINE API).
 
 - **[ ] Develop Content Auto-Monitoring Agent (Backend Process)**:
     - **[ ] Choose Agent Architecture**:
@@ -148,7 +148,7 @@
 - **Implemented basic detailed loading state indication for content processing by leveraging AI flow's progress output.**
 - **Refined `generateContentSummary` prompt for better handling of HTML extraction and progress reporting, and added initial Gemini safety settings.**
 - **Refactored Settings page to manage only non-sensitive user preferences in `localStorage`; sensitive API keys are now expected as server-side environment variables.**
-- **[x] Implemented core logic for `sendToLineAction` to make API calls to LINE with a basic Flex Message. Client-side updated to pass `lineUserId`.**
+- **[x] Implemented core logic for `sendToLineAction` to make API calls to LINE with a basic Flex Message. Client-side updated to pass `lineUserId`. Server-side error parsing from LINE API enhanced.**
 - **[x] Refined `formulateSearchStrategy` prompt to ensure output JSON field names match the Zod schema.**
 - **[x] Enhanced error handling in `processDiscoveredContent` for catastrophic AI flow failures.**
 

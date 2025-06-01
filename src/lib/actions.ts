@@ -261,9 +261,22 @@ export async function sendToLineAction(
     });
 
     if (!response.ok) {
-      const errorBody = await response.json().catch(() => ({ message: 'Failed to parse error response from LINE API.' }));
-      console.error('LINE API Error:', response.status, errorBody);
-      return { success: false, message: `LINE API Error (${response.status}): ${errorBody.message || 'Unknown error'}` };
+      let errorMessage = `LINE API Error (${response.status}): `;
+      try {
+        const errorBody = await response.json();
+        errorMessage += errorBody.message || 'Unknown error';
+        if (errorBody.details && Array.isArray(errorBody.details)) {
+          const details = errorBody.details.map((detail: any) => `${detail.property}: ${detail.message}`).join(', ');
+          if (details) {
+            errorMessage += ` (Details: ${details})`;
+          }
+        }
+        console.error('LINE API Error:', response.status, JSON.stringify(errorBody, null, 2));
+      } catch (parseError) {
+        errorMessage += 'Failed to parse error response from LINE API.';
+        console.error('LINE API Error: Failed to parse error response. Status:', response.status);
+      }
+      return { success: false, message: errorMessage };
     }
 
     return { success: true, message: `Content "${content.title || 'proposal'}" sent to LINE successfully.` };
