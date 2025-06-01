@@ -90,7 +90,7 @@
     - **[x]** Review and adjust Gemini safety settings in `generateContentSummary` Genkit flow. (Initial settings added)
 - **[x] Refine prompt for `formulateSearchStrategy`**:
     - **[x]** Ensured example JSON in prompt matches Zod schema field names.
-    - **[x]** (Future) Consider adding few-shot examples for `formulateSearchStrategy`.
+    - **[x]** Added few-shot examples for `formulateSearchStrategy`.
 - **[x] Implement Genkit Tool for Web Content Fetching**:
     - **[x]** Create a new Genkit `Tool` (`fetchWebsiteContentTool`).
     - **[x]** This tool accepts a URL, fetches its raw HTML content. (LLM is then prompted to parse/extract from this raw HTML).
@@ -137,11 +137,13 @@
 
 ### Deployment & Operations
 
-- **[ ] Detail `apphosting.yaml` Configuration**:
+- **[~] Detail `apphosting.yaml` Configuration**:
+    - **[x] Added common resource settings (CPU, memory, minInstances) and comments.**
     - Review and optimize resource settings (CPU, memory, min/max instances) for the production environment, especially considering the potential load from the auto-monitoring agent.
 - **[x] Environment Variable Management Strategy**:
     - **Clarification**: Sensitive API keys (Google AI, LINE_CHANNEL_ACCESS_TOKEN, GITHUB_PAT etc.) must be managed via environment variables (e.g., `.env` locally, platform-specific settings for App Hosting). The Settings UI now directs users accordingly. Non-sensitive user preferences use `localStorage` (managed by `useAppSettings` hook).
-- **[ ] Logging and Monitoring Strategy**:
+- **[~] Logging and Monitoring Strategy**:
+    - **[x] Enhanced basic server-side console logging in key actions and AI flows.**
     - Enhance server-side logging for server actions and AI flow executions (Genkit has logging capabilities).
     - Set up alerts in Cloud Monitoring (if using Google Cloud) for error rates or performance degradation.
 
@@ -169,10 +171,11 @@
 - **Enhanced `publishToGithubAction` to correctly handle updating existing files.**
 - **Improved loading state indication for action buttons in `ContentCard` with per-button spinners.**
 - **Added few-shot examples to `formulateSearchStrategy` prompt.**
+- **Updated `apphosting.yaml` with common resource settings and comments.**
+- **Enhanced basic server-side console logging in key actions and AI flows.**
 
 ---
 
 This expanded list should provide a more detailed roadmap. Remember, building all of this takes time and iterative development!
 Let me know which areas you'd like to focus on next.
 
-    

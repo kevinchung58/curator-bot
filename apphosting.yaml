@@ -2,6 +2,40 @@
 # https://firebase.google.com/docs/app-hosting/configure
 
 runConfig:
+  # The number of CPU cores to allocate to each instance.
+  # Default is 1. Fractional CPUs are not supported.
+  # For Gen 2 Cloud Functions (which App Hosting uses), common values are 1, 2, 4.
+  cpu: 1
+  # The amount of memory in MiB to allocate to each instance.
+  # Default is 512. Max is 32768 (32 GiB).
+  memoryMiB: 512
+  # The maximum number of instances that can be spun up.
   # Increase this value if you'd like to automatically spin up
   # more instances in response to increased traffic.
   maxInstances: 1
+  # The minimum number of instances to keep running.
+  # Set to 0 to allow scaling to zero for cost savings during idle periods.
+  # If you implement an auto-monitoring agent that needs to run continuously
+  # or frequently, you might consider setting this to 1.
+  minInstances: 0
+  # Concurrency refers to the number of requests an instance can handle at the same time.
+  # Default is 80. Max is 1000.
+  # concurrency: 80
+  # Timeout for requests, in seconds.
+  # Default is 60s. Max is 3600s (1 hour).
+  # timeoutSeconds: 60
+
+# buildSettings:
+  # Optional: Specify a custom build command.
+  # By default, App Hosting will try to detect and run the appropriate build command.
+  # buildCommand: "npm run build"
+  # Optional: Specify the version of Node.js to use.
+  # nodeVersion: "20" # Or your desired LTS version
+
+# Environment variables can also be set here, but it's often preferred
+# to set them via the Firebase console or gcloud for sensitive values.
+# env:
+#   - variable: MY_ENV_VAR
+#     value: "my_value"
+#   - variable: ANOTHER_VAR
+#     value: "another_value"

@@ -33,6 +33,7 @@ export async function submitStrategyForm(prevState: StrategyFormState | undefine
       message: 'Validation Error: Please check your input.',
     };
   }
+  console.log('Formulating search strategy for curriculum excerpt:', validatedFields.data.curriculum.substring(0,100) + "...");
 
   try {
     const input: FormulateSearchStrategyInput = {
@@ -78,6 +79,7 @@ export async function processDiscoveredContent(
       articleId: articleId,
     };
   }
+  console.log('Processing content for URL:', validatedFields.data.articleUrl, 'Topic:', validatedFields.data.topic);
 
   try {
     const input: GenerateContentSummaryInput = {
@@ -169,12 +171,14 @@ export async function sendToLineAction(
   content: ProcessedContent,
   lineUserId: string | undefined | null
 ): Promise<{ success: boolean; message: string }> {
+  console.log('Attempting to send content to LINE User ID:', lineUserId, 'Title:', content.title);
   if (!lineUserId) {
     return { success: false, message: 'LINE User ID not provided. Please configure it in Settings.' };
   }
 
   const lineChannelAccessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
   if (!lineChannelAccessToken) {
+    console.error('LINE_CHANNEL_ACCESS_TOKEN not configured on the server.');
     return { success: false, message: 'LINE Channel Access Token not configured on the server.' };
   }
 
@@ -344,6 +348,7 @@ export async function publishToGithubAction(
   }
   const githubPat = process.env.GITHUB_PAT;
   if (!githubPat) {
+    console.error('GITHUB_PAT not configured on the server.');
     return { success: false, message: 'GitHub Personal Access Token (GITHUB_PAT) not configured on the server.' };
   }
 
@@ -368,33 +373,33 @@ export async function publishToGithubAction(
   let existingFileSha: string | undefined = undefined;
 
   try {
+    console.log(`Checking for existing file at: ${owner}/${repo}/${filePath}`);
     const { data: existingFileData } = await octokit.rest.repos.getContent({
       owner,
       repo,
       path: filePath,
     });
-    // Ensure existingFileData is not an array (which means it's a directory) and is a file
     if (existingFileData && !Array.isArray(existingFileData) && existingFileData.type === 'file') {
       existingFileSha = existingFileData.sha;
+      console.log(`Existing file found with SHA: ${existingFileSha}`);
     }
   } catch (error: any) {
     if (error.status !== 404) {
-      // A 404 means the file doesn't exist, which is fine for creation.
-      // Any other error during getContent should be reported.
       console.error(`Error checking existing file content for ${filePath}:`, error);
       return { success: false, message: `GitHub API Error: Could not verify existing file. ${error.message}` };
     }
-    // If 404, file doesn't exist, existingFileSha remains undefined.
+    console.log(`File ${filePath} not found. Will create a new one.`);
   }
 
   try {
+    console.log(`${existingFileSha ? 'Updating' : 'Creating'} file ${filePath} on GitHub.`);
     const { data: result } = await octokit.rest.repos.createOrUpdateFileContents({
       owner,
       repo,
       path: filePath,
       message: commitMessage,
       content: contentBase64,
-      sha: existingFileSha, // Will be undefined for new files, or the SHA for existing files
+      sha: existingFileSha,
       committer: {
         name: 'Content Curator Bot',
         email: 'bot@example.com', 
@@ -407,6 +412,7 @@ export async function publishToGithubAction(
 
     const fileUrl = result.content?.html_url || `https://github.com/${owner}/${repo}/blob/main/${filePath}`; 
     const actionVerb = existingFileSha ? 'updated' : 'created';
+    console.log(`File ${actionVerb} successfully: ${fileUrl}`);
 
     return { 
       success: true, 
@@ -421,7 +427,7 @@ export async function publishToGithubAction(
       errorMessage = 'GitHub API Error: Bad credentials (Invalid GITHUB_PAT or insufficient permissions).';
     } else if (error.status === 404) {
       errorMessage = `GitHub API Error: Repository not found or path "${filePath}" issue. Ensure 'curated-content' directory exists.`;
-    } else if (error.status === 409) { // Conflict, usually means branch not up to date or no SHA provided when it should be
+    } else if (error.status === 409) {
        errorMessage = `GitHub API Error: Conflict detected. If updating, the file might have changed. Path: ${filePath}`;
     } else if (error.status === 422 && error.message?.toLowerCase().includes("sha")) {
       errorMessage = `GitHub API Error: Invalid SHA or conflict updating file. It might have been changed since last check. Path: ${filePath}`;
@@ -431,4 +437,3 @@ export async function publishToGithubAction(
     return { success: false, message: errorMessage };
   }
 }
-

@@ -132,6 +132,7 @@ const generateContentSummaryFlow = ai.defineFlow(
     outputSchema: GenerateContentSummaryOutputSchema,
   },
   async (input: GenerateContentSummaryInput) => {
+    console.log('[AI Flow] generateContentSummaryFlow invoked with input:', input);
     const {output, history} = await prompt(input);
 
     if (!output) {

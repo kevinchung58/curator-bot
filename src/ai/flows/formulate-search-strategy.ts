@@ -76,6 +76,7 @@ const formulateSearchStrategyFlow = ai.defineFlow(
     outputSchema: FormulateSearchStrategyOutputSchema,
   },
   async input => {
+    console.log('[AI Flow] formulateSearchStrategyFlow invoked with input excerpt:', input.curriculum.substring(0,100) + "...");
     const {output} = await formulateSearchStrategyPrompt(input);
     return output!;
   }
