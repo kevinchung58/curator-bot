@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { processDiscoveredContent, sendToLineAction, publishToGithubAction } from '@/lib/actions';
 import type { ProcessedContent, AppSettings } from '@/lib/definitions';
 import { ContentCard } from './ContentCard';
-import { PlusCircle, Search, Bot, AlertTriangle, Info, Github } from 'lucide-react';
+import { PlusCircle, Search, Bot, AlertTriangle, Info, Github, CheckCircle2, XCircle, HelpCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs
 
@@ -48,6 +48,10 @@ export function DiscoveredContentSection() {
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
 
+  type AgentStatusValue = 'running' | 'degraded' | 'offline' | 'unknown';
+  const [agentStatus, setAgentStatus] = useState<AgentStatusValue>('running');
+  const [agentStatusMessage, setAgentStatusMessage] = useState('Agent is running smoothly (Simulated).');
+
   useEffect(() => {
     getAppSettings().then(settings => {
       if (settings.defaultTopic) {
@@ -71,6 +75,24 @@ export function DiscoveredContentSection() {
         }
       }
     }
+
+    // Simulate agent status changes for demonstration
+    const statuses: Array<{ status: AgentStatusValue, message: string }> = [
+      { status: 'running', message: 'Agent is running smoothly (Simulated).' },
+      { status: 'degraded', message: 'Agent experiencing some delays (Simulated).' },
+      { status: 'offline', message: 'Agent is currently offline (Simulated).' },
+    ];
+    let currentIndex = 0; // Start with running
+    setAgentStatus(statuses[currentIndex].status);
+    setAgentStatusMessage(statuses[currentIndex].message);
+
+    const intervalId = setInterval(() => {
+      currentIndex = (currentIndex + 1) % statuses.length;
+      setAgentStatus(statuses[currentIndex].status);
+      setAgentStatusMessage(statuses[currentIndex].message);
+    }, 15000); // Change status every 15 seconds
+
+    return () => clearInterval(intervalId);
   }, []);
 
   useEffect(() => {
@@ -157,7 +179,7 @@ export function DiscoveredContentSection() {
       const result = await publishToGithubAction(content, currentGithubRepoUrl);
       if (result.success) {
         setDiscoveredItems(prev => prev.map(item => item.id === content.id ? {...item, status: 'publishedToGithub', progressMessage: result.message } : item));
-        toast({ title: 'Published to GitHub (Simulated)', description: result.message });
+        toast({ title: 'Published to GitHub', description: result.message });
       } else {
         toast({ title: 'GitHub Publish Error', description: result.message, variant: 'destructive' });
       }
@@ -180,6 +202,13 @@ export function DiscoveredContentSection() {
         </CardTitle>
         <CardDescription>
           Add URLs of discovered content or connect to a monitoring agent (feature pending). Then, process them to generate summaries and tags. Current topic for processing: <span className="font-semibold text-primary">{currentTopic}</span>.
+          <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
+            {agentStatus === 'running' && <CheckCircle2 className="h-4 w-4 text-green-600" />}
+            {agentStatus === 'degraded' && <AlertTriangle className="h-4 w-4 text-yellow-600" />}
+            {agentStatus === 'offline' && <XCircle className="h-4 w-4 text-red-600" />}
+            {agentStatus === 'unknown' && <HelpCircle className="h-4 w-4 text-gray-500" />}
+            <span>Agent Status: {agentStatusMessage}</span>
+          </div>
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
