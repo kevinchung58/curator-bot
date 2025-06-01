@@ -7,7 +7,7 @@
 - **Content Discovery & Processing**: When a user adds a URL, the content is summarized, and tags are generated. (Basic implementation complete, uses local storage for discovered items, processing via AI flow, now with a Genkit tool for web fetching, basic progress display, and refined AI prompt for summarization with safety settings and few-shot examples.)
 - **Settings**: Non-sensitive user preferences (default topic, LINE User ID, GitHub Repo URL) can be configured and are saved to `localStorage`. Sensitive API keys (Google AI, LINE, GitHub PAT) are managed via server-side environment variables. (UI updated, `saveSettings` action refined)
 - **Send to LINE**: Button exists. Core logic to make API call to LINE with a Flex Message implemented in server action. Client-side logic to retrieve and pass `lineUserId` also implemented. Actual sending depends on valid server-side `LINE_CHANNEL_ACCESS_TOKEN` and client-side `lineUserId` configuration. Server-side error parsing from LINE API enhanced.
-- **Publish to GitHub**: Button exists for processed content. Calls a server action that now generates Markdown for the content and **creates/updates files in the specified GitHub repository using Octokit**. Client-side logic retrieves `githubRepoUrl` and handles success/failure toasts. Actual Git operations or API calls need implementation. `GITHUB_PAT` environment variable is required.
+- **Publish to GitHub**: Button exists for processed content. Calls a server action that now generates Markdown for the content and **creates/updates files in the specified GitHub repository using Octokit**. Client-side logic retrieves `githubRepoUrl` and handles success/failure toasts. `GITHUB_PAT` environment variable is required.
 
 ## 📝 TODO List (English)
 
@@ -52,7 +52,7 @@
         - Once new content is discovered and fetched, the agent should invoke the `generateContentSummary` Genkit flow.
     - **[ ] Persistent Storage for Discovered Content**:
         - Save newly discovered and processed content items to a database (e.g., Firestore) so they can be displayed in the UI's "Discovered Content Section". This replaces the current `localStorage` approach for items found by the agent.
-    - **[~] Add Visual Status Indicator for Agent Health**: (Agent backend not yet implemented)
+    - **[~] Add Visual Status Indicator for Agent Health**:
         - **[x] UI placeholder added to display simulated agent status in `DiscoveredContentSection`.**
         - **[ ]** Implement a way for the agent to report its operational status (e.g., running, error, stopped).
         - **[ ]** Display this status in the UI by querying the agent's status from its storage location or a health endpoint. 
@@ -63,8 +63,8 @@
     - **[x] Secure GitHub PAT Usage**:
         - Retrieve and use the GitHub Personal Access Token from a secure server-side environment variable (`GITHUB_PAT`). (Action now uses this for Octokit).
     - **[x] Implement Git Operations**:
-        - **`publishToGithubAction` now uses `@octokit/rest` to create/update files in the specified GitHub repository.**
-        - **Basic error handling for GitHub API calls implemented.**
+        - **`publishToGithubAction` now uses `@octokit/rest` to create/update files (handling both new and existing files) in the specified GitHub repository.**
+        - **Error handling for GitHub API calls implemented and refined.**
         - **NOTE**: Assumes a base directory like `curated-content/` exists in the repo or user creates it. More robust directory creation/checking could be future enhancement.
     - **[~] Define File/Repository Structure**:
         - **Decision**: Files will be organized under a `curated-content/` directory.

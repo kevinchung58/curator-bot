@@ -362,42 +362,42 @@ export async function publishToGithubAction(
   const slugifiedTitle = slugify(content.title || 'untitled');
   const shortId = content.id.substring(0, 8);
   const fileName = `${format(new Date(), 'yyyy-MM-dd')}-${slugifiedTitle}-${shortId}.md`;
-  const filePath = `curated-content/${fileName}`; // Ensure this directory exists or is created by user. Octokit won't create it.
-                                                // For robust solution, check if dir exists or use a different strategy.
-                                                // For now, let's assume 'curated-content' directory exists or user creates it.
+  const filePath = `curated-content/${fileName}`;
 
-  const commitMessage = `feat: Add curated content "${content.title || 'Untitled'}"`;
+  const commitMessage = `feat: Add/Update curated content "${content.title || 'Untitled'}"`;
+  let existingFileSha: string | undefined = undefined;
 
   try {
-    let existingFileSha: string | undefined = undefined;
-    try {
-      const { data: existingFileData } = await octokit.rest.repos.getContent({
-        owner,
-        repo,
-        path: filePath,
-      });
-      if (existingFileData && !Array.isArray(existingFileData) && existingFileData.type === 'file') {
-        existingFileSha = existingFileData.sha;
-      }
-    } catch (error: any) {
-      // If error is 404, file doesn't exist, which is fine for creation.
-      // Otherwise, it might be a different issue (e.g. permissions, repo not found for getContent)
-      if (error.status !== 404) {
-        console.error('Error checking existing file content:', error);
-        // We can still attempt to create/update, but this might fail if it's a permissions issue etc.
-      }
+    const { data: existingFileData } = await octokit.rest.repos.getContent({
+      owner,
+      repo,
+      path: filePath,
+    });
+    // Ensure existingFileData is not an array (which means it's a directory) and is a file
+    if (existingFileData && !Array.isArray(existingFileData) && existingFileData.type === 'file') {
+      existingFileSha = existingFileData.sha;
     }
+  } catch (error: any) {
+    if (error.status !== 404) {
+      // A 404 means the file doesn't exist, which is fine for creation.
+      // Any other error during getContent should be reported.
+      console.error(`Error checking existing file content for ${filePath}:`, error);
+      return { success: false, message: `GitHub API Error: Could not verify existing file. ${error.message}` };
+    }
+    // If 404, file doesn't exist, existingFileSha remains undefined.
+  }
 
+  try {
     const { data: result } = await octokit.rest.repos.createOrUpdateFileContents({
       owner,
       repo,
       path: filePath,
       message: commitMessage,
       content: contentBase64,
-      sha: existingFileSha, // Provide SHA if updating, otherwise it's a create
+      sha: existingFileSha, // Will be undefined for new files, or the SHA for existing files
       committer: {
         name: 'Content Curator Bot',
-        email: 'bot@example.com', // Replace with a generic or configurable email
+        email: 'bot@example.com', 
       },
       author: {
         name: 'Content Curator Bot',
@@ -405,26 +405,30 @@ export async function publishToGithubAction(
       },
     });
 
-    const fileUrl = result.content?.html_url || `https://github.com/${owner}/${repo}/blob/main/${filePath}`; // Fallback URL
+    const fileUrl = result.content?.html_url || `https://github.com/${owner}/${repo}/blob/main/${filePath}`; 
+    const actionVerb = existingFileSha ? 'updated' : 'created';
 
     return { 
       success: true, 
-      message: `Content "${content.title || 'Untitled'}" ${existingFileSha ? 'updated' : 'created'} on GitHub: ${fileName}`,
+      message: `Content "${content.title || 'Untitled'}" ${actionVerb} on GitHub: ${fileName}`,
       fileUrl: fileUrl 
     };
 
   } catch (error: any) {
-    console.error('GitHub API Error during publishToGithubAction:', error);
+    console.error('GitHub API Error during createOrUpdateFileContents:', error);
     let errorMessage = 'Failed to publish to GitHub.';
     if (error.status === 401) {
       errorMessage = 'GitHub API Error: Bad credentials (Invalid GITHUB_PAT or insufficient permissions).';
     } else if (error.status === 404) {
       errorMessage = `GitHub API Error: Repository not found or path "${filePath}" issue. Ensure 'curated-content' directory exists.`;
-    } else if (error.status === 422 && error.message?.includes("sha")) {
-      errorMessage = `GitHub API Error: Conflict updating file. It might have been changed. Try again. Path: ${filePath}`;
+    } else if (error.status === 409) { // Conflict, usually means branch not up to date or no SHA provided when it should be
+       errorMessage = `GitHub API Error: Conflict detected. If updating, the file might have changed. Path: ${filePath}`;
+    } else if (error.status === 422 && error.message?.toLowerCase().includes("sha")) {
+      errorMessage = `GitHub API Error: Invalid SHA or conflict updating file. It might have been changed since last check. Path: ${filePath}`;
     } else if (error.message) {
       errorMessage = `GitHub API Error: ${error.message}`;
     }
     return { success: false, message: errorMessage };
   }
 }
+
