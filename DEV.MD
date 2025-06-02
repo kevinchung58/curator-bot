@@ -3,10 +3,10 @@
 
 ## 🚀 Key Feature Status
 
-- **Strategy Formulation**: When a user inputs a curriculum/topic, the AI suggests relevant search keywords, target websites, and content types to monitor. (Basic implementation complete, prompt refined for schema adherence and few-shot examples added. Client-side validation added.)
+- **Strategy Formulation**: When a user inputs a curriculum/topic, the AI suggests relevant search keywords, target websites, and content types to monitor. (Basic implementation complete, prompt refined for schema adherence and few-shot examples added. Client-side validation added via `react-hook-form`.)
 - **Content Discovery & Processing**: When a user adds a URL, the content is summarized, and tags are generated. (Basic implementation complete, uses local storage for discovered items, processing via AI flow, now with a Genkit tool for web fetching, basic progress display, and refined AI prompt for summarization with safety settings and few-shot examples.)
 - **[x] Image Generation**: For processed content, users can trigger AI-powered image generation to create illustrative visuals. (Genkit flow, server action, and UI integration complete. Displays image, loading, and error states.)
-- **Settings**: Non-sensitive user preferences (default topic, LINE User ID, GitHub Repo URL) can be configured and are saved to `localStorage` via a custom hook `useAppSettings`. Sensitive API keys (Google AI, LINE, GitHub PAT) are managed via server-side environment variables. (UI updated, `saveSettings` action refined, `useAppSettings` hook implemented and integrated)
+- **Settings**: Non-sensitive user preferences (default topic, LINE User ID, GitHub Repo URL) can be configured and are saved to `localStorage` via a custom hook `useAppSettings`. Sensitive API keys (Google AI, LINE, GitHub PAT) are managed via server-side environment variables. (UI updated, `saveSettings` action refined, `useAppSettings` hook implemented and integrated. Client-side validation added.)
 - **Send to LINE**: Button exists. Core logic to make API call to LINE with a Flex Message implemented in server action. Client-side logic to retrieve and pass `lineUserId` also implemented. Actual sending depends on valid server-side `LINE_CHANNEL_ACCESS_TOKEN` and client-side `lineUserId` configuration. Server-side error parsing from LINE API enhanced.
 - **Publish to GitHub**: Button exists for processed content. Calls a server action that now generates Markdown for the content and creates/updates files in the specified GitHub repository using Octokit. Client-side logic retrieves `githubRepoUrl` and handles success/failure toasts. `GITHUB_PAT` environment variable is required.
 
@@ -108,10 +108,10 @@
     - **[x]** Extend to publishing actions and other card actions (Process, Send to LINE, Publish to GitHub, Generate Image buttons in `ContentCard` now have specific loading spinners).
 - **[x] Strengthen User Feedback and Notifications**:
     - **[x]** Continue consistent and informative use of `useToast` for all user actions.
-- **[~] Improve Input Validation Messages**:
+- **[x] Improve Input Validation Messages**:
     - **[x]** Make Zod validation error messages more user-friendly in forms (Strategy Section done via `FormMessage`).
     - **[x]** Add client-side validation for quicker feedback, in addition to server-side validation (Strategy Section done).
-    - **[ ]** Apply client-side validation to Settings page.
+    - **[x]** Apply client-side validation to Settings page.
 - **[ ] Review Responsive Design and Accessibility (A11y)**:
     - Regularly check layouts on various screen sizes.
     - Ensure proper ARIA attributes and semantic HTML for web accessibility.
@@ -119,9 +119,9 @@
 
 ### Technical Debt & Code Quality
 
-- **[x] Overall Error Handling Enhancement**:
+- **[~] Overall Error Handling Enhancement**:
     - Implement comprehensive error handling across:
-        - Client components (React Error Boundaries for sections).
+        - **[ ] Client components (React Error Boundaries for sections).**
         - **[x]** Server Actions (return clear error states, especially for catastrophic AI flow failures - improved for `generateContentSummary`, `sendToLineAction`, `generateImageForContentAction` with further refinement for AI system errors in `processDiscoveredContent`).
         - **[x]** AI Flows (graceful failure and error reporting - improved for `generateContentSummary`, `generateIllustrativeImageFlow`).
         - Future Monitoring Agent (robust logging and error recovery).
@@ -161,7 +161,7 @@
 - **Refined `generateContentSummary` prompt for better handling of HTML extraction and progress reporting, added initial Gemini safety settings, and added few-shot examples.**
 - **Refactored Settings page to manage only non-sensitive user preferences in `localStorage`; sensitive API keys are now expected as server-side environment variables. Created `useAppSettings` hook to manage this client-side storage.**
 - **Implemented core logic for `sendToLineAction` to make API calls to LINE with a basic Flex Message. Client-side updated to pass `lineUserId`. Server-side error parsing from LINE API enhanced.**
-- **Refined `formulateSearchStrategy` prompt to ensure output JSON field names match the Zod schema and added few-shot examples. Integrated `react-hook-form` for client-side validation.**
+- **Refined `formulateSearchStrategy` prompt to ensure output JSON field names match the Zod schema and added few-shot examples. Integrated `react-hook-form` for client-side validation in Strategy Section.**
 - **Enhanced error handling in `processDiscoveredContent` for catastrophic AI flow failures.**
 - **Implemented placeholder functionality for "Publish to GitHub" including UI button, server action (which now generates Markdown), and status updates.**
 - **Cleaned up a redundant global font-family CSS rule.**
@@ -173,8 +173,10 @@
 - **Updated `apphosting.yaml` with common resource settings and comments.**
 - **Enhanced basic server-side console logging in key actions and AI flows.**
 - **Implemented Image Generation feature: Genkit flow, server action, UI in `ContentCard` for generating and displaying images, including loading/error states.**
+- **Applied client-side validation using `react-hook-form` to the Settings page.**
 
 ---
 
 This expanded list should provide a more detailed roadmap. Remember, building all of this takes time and iterative development!
 Let me know which areas you'd like to focus on next.
+
