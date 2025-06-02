@@ -5,7 +5,7 @@
 
 - **Strategy Formulation**: When a user inputs a curriculum/topic, the AI suggests relevant search keywords, target websites, and content types to monitor. (Basic implementation complete, prompt refined for schema adherence and few-shot examples added. Client-side validation added.)
 - **Content Discovery & Processing**: When a user adds a URL, the content is summarized, and tags are generated. (Basic implementation complete, uses local storage for discovered items, processing via AI flow, now with a Genkit tool for web fetching, basic progress display, and refined AI prompt for summarization with safety settings and few-shot examples.)
-- **Image Generation**: For processed content, users can trigger AI-powered image generation to create illustrative visuals. (Basic Genkit flow, server action, and UI integration complete. Displays image, loading, and error states.)
+- **[x] Image Generation**: For processed content, users can trigger AI-powered image generation to create illustrative visuals. (Genkit flow, server action, and UI integration complete. Displays image, loading, and error states.)
 - **Settings**: Non-sensitive user preferences (default topic, LINE User ID, GitHub Repo URL) can be configured and are saved to `localStorage` via a custom hook `useAppSettings`. Sensitive API keys (Google AI, LINE, GitHub PAT) are managed via server-side environment variables. (UI updated, `saveSettings` action refined, `useAppSettings` hook implemented and integrated)
 - **Send to LINE**: Button exists. Core logic to make API call to LINE with a Flex Message implemented in server action. Client-side logic to retrieve and pass `lineUserId` also implemented. Actual sending depends on valid server-side `LINE_CHANNEL_ACCESS_TOKEN` and client-side `lineUserId` configuration. Server-side error parsing from LINE API enhanced.
 - **Publish to GitHub**: Button exists for processed content. Calls a server action that now generates Markdown for the content and creates/updates files in the specified GitHub repository using Octokit. Client-side logic retrieves `githubRepoUrl` and handles success/failure toasts. `GITHUB_PAT` environment variable is required.
@@ -94,7 +94,7 @@
     - **[x]** Create a new Genkit `Tool` (`fetchWebsiteContentTool`).
     - **[x]** This tool accepts a URL, fetches its raw HTML content.
     - **[x]** Modify the `generateContentSummary` flow to use this tool.
-- **[~] Image Generation/Processing Feature (Optional Enhancement)**:
+- **[x] Image Generation/Processing Feature**:
     - **[x]** Created Genkit flow (`generateIllustrativeImageFlow`) using `googleai/gemini-2.0-flash-exp` to generate images based on summaries and titles.
     - **[x]** Implemented server action (`generateImageForContentAction`) to call the flow.
     - **[x]** Added UI elements in `ContentCard` to trigger image generation, display the image (using `next/image`), or show loading/error states.

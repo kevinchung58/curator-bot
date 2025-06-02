@@ -50,7 +50,13 @@ export function DiscoveredContentSection() {
       const savedItems = localStorage.getItem('discoveredContentItems');
       if (savedItems) {
         try {
-          setDiscoveredItems(JSON.parse(savedItems));
+          const parsedItems: ProcessedContent[] = JSON.parse(savedItems);
+          // Ensure all items have an imageStatus, defaulting to 'none'
+          const itemsWithImageStatus = parsedItems.map(item => ({
+            ...item,
+            imageStatus: item.imageStatus || 'none'
+          }));
+          setDiscoveredItems(itemsWithImageStatus);
         } catch (e) {
             console.error("Failed to parse discovered items from localStorage", e);
             localStorage.removeItem('discoveredContentItems');
@@ -111,7 +117,7 @@ export function DiscoveredContentSection() {
     startTransition(async () => {
       const result = await processDiscoveredContent(articleId, articleUrl, currentTopic);
       if (result.processedContent) {
-        setDiscoveredItems(prev => prev.map(item => item.id === articleId ? { ...result.processedContent!, imageStatus: 'none' } : item));
+        setDiscoveredItems(prev => prev.map(item => item.id === articleId ? { ...result.processedContent!, imageStatus: result.processedContent!.imageStatus || 'none' } : item));
         toast({
           title: result.processedContent.status === 'processed' ? 'Success' : 'Processing Issue',
           description: result.message || (result.processedContent.status === 'processed' ? 'Content processed.' : 'An issue occurred.'),

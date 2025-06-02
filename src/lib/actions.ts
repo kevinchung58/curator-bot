@@ -5,7 +5,7 @@ import { formulateSearchStrategy, FormulateSearchStrategyInput, FormulateSearchS
 import { generateContentSummary, GenerateContentSummaryInput, GenerateContentSummaryOutput } from '@/ai/flows/generate-content-summary';
 import { generateIllustrativeImage, GenerateIllustrativeImageInput, GenerateIllustrativeImageOutput } from '@/ai/flows/generate-illustrative-image';
 import type { SearchStrategy, ProcessedContent, AppSettings } from './definitions';
-import { StrategyFormSchema } from './definitions'; // Import from definitions
+import { StrategyFormSchema, SettingsFormSchema } from './definitions'; // Import from definitions
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { format } from 'date-fns';
@@ -134,14 +134,6 @@ export async function processDiscoveredContent(
 
 
 // --- Settings ---
-// Exporting the schema for client-side use
-export const SettingsFormSchema = z.object({
-  defaultTopic: z.string().optional(),
-  lineUserId: z.string().optional(),
-  githubRepoUrl: z.string().url({ message: "Invalid GitHub Repository URL format. Expected: https://github.com/user/repo" }).optional().or(z.literal('')),
-});
-
-
 export type SettingsFormState = {
   message?: string | null;
   errors?: {

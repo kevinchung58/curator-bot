@@ -34,3 +34,10 @@ export type AppSettings = {
 export const StrategyFormSchema = z.object({
   curriculum: z.string().min(10, { message: 'Curriculum must be at least 10 characters long.' }),
 });
+
+// Zod schema for client-side and server-side validation of the settings form
+export const SettingsFormSchema = z.object({
+  defaultTopic: z.string().optional(),
+  lineUserId: z.string().optional(),
+  githubRepoUrl: z.string().url({ message: "Invalid GitHub Repository URL format. Expected: https://github.com/user/repo" }).optional().or(z.literal('')),
+});
