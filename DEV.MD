@@ -115,7 +115,9 @@
 - **[ ] Review Responsive Design and Accessibility (A11y)**:
     - Regularly check layouts on various screen sizes.
     - Ensure proper ARIA attributes and semantic HTML for web accessibility.
-- **[x] CSS Cleanup**: Removed redundant global font-family CSS rule.
+- **[x] CSS Cleanup**: 
+    - **[x]** Removed redundant global font-family CSS rule.
+    - **[x]** Consolidated `@layer base` directives in `globals.css`.
 
 ### Technical Debt & Code Quality
 
@@ -175,8 +177,10 @@
 - **Implemented Image Generation feature: Genkit flow, server action, UI in `ContentCard` for generating and displaying images, including loading/error states.**
 - **Applied client-side validation using `react-hook-form` to the Settings page.**
 - **Introduced a React ErrorBoundary component and applied it to `DiscoveredContentSection` and `StrategySection` on the dashboard page.**
+- **Consolidated `@layer base` directives in `globals.css`.**
 
 ---
 
 This expanded list should provide a more detailed roadmap. Remember, building all of this takes time and iterative development!
 Let me know which areas you'd like to focus on next.
+
