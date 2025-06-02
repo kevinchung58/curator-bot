@@ -121,7 +121,7 @@
 
 - **[~] Overall Error Handling Enhancement**:
     - Implement comprehensive error handling across:
-        - **[ ] Client components (React Error Boundaries for sections).**
+        - **[~] Client components (React Error Boundaries for sections).** (Started: ErrorBoundary created and applied to DiscoveredContentSection and StrategySection on dashboard page)
         - **[x]** Server Actions (return clear error states, especially for catastrophic AI flow failures - improved for `generateContentSummary`, `sendToLineAction`, `generateImageForContentAction` with further refinement for AI system errors in `processDiscoveredContent`).
         - **[x]** AI Flows (graceful failure and error reporting - improved for `generateContentSummary`, `generateIllustrativeImageFlow`).
         - Future Monitoring Agent (robust logging and error recovery).
@@ -174,9 +174,9 @@
 - **Enhanced basic server-side console logging in key actions and AI flows.**
 - **Implemented Image Generation feature: Genkit flow, server action, UI in `ContentCard` for generating and displaying images, including loading/error states.**
 - **Applied client-side validation using `react-hook-form` to the Settings page.**
+- **Introduced a React ErrorBoundary component and applied it to `DiscoveredContentSection` and `StrategySection` on the dashboard page.**
 
 ---
 
 This expanded list should provide a more detailed roadmap. Remember, building all of this takes time and iterative development!
 Let me know which areas you'd like to focus on next.
-

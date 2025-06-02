@@ -1,7 +1,9 @@
+
 import { PageTitle } from '@/components/PageTitle';
 import { StrategySection } from '@/components/dashboard/StrategySection';
 import { DiscoveredContentSection } from '@/components/dashboard/DiscoveredContentSection';
 import { Separator } from '@/components/ui/separator';
+import ErrorBoundary from '@/components/ErrorBoundary';
 
 export default function DashboardPage() {
   return (
@@ -11,9 +13,13 @@ export default function DashboardPage() {
         description="Manage your content curation workflow, from strategy to processing."
       />
       <div className="space-y-8">
-        <StrategySection />
+        <ErrorBoundary fallbackMessage="Could not load the search strategy formulation section.">
+          <StrategySection />
+        </ErrorBoundary>
         <Separator />
-        <DiscoveredContentSection />
+        <ErrorBoundary fallbackMessage="Could not load the discovered content section. Please check your connection or try refreshing.">
+          <DiscoveredContentSection />
+        </ErrorBoundary>
       </div>
     </div>
   );
