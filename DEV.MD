@@ -3,7 +3,7 @@
 
 ## 🚀 Key Feature Status
 
-- **Strategy Formulation**: When a user inputs a curriculum/topic, the AI suggests relevant search keywords, target websites, and content types to monitor. (Basic implementation complete, prompt refined for schema adherence and few-shot examples added)
+- **Strategy Formulation**: When a user inputs a curriculum/topic, the AI suggests relevant search keywords, target websites, and content types to monitor. (Basic implementation complete, prompt refined for schema adherence and few-shot examples added. Client-side validation added.)
 - **Content Discovery & Processing**: When a user adds a URL, the content is summarized, and tags are generated. (Basic implementation complete, uses local storage for discovered items, processing via AI flow, now with a Genkit tool for web fetching, basic progress display, and refined AI prompt for summarization with safety settings and few-shot examples.)
 - **Image Generation**: For processed content, users can trigger AI-powered image generation to create illustrative visuals. (Basic Genkit flow, server action, and UI integration complete. Displays image, loading, and error states.)
 - **Settings**: Non-sensitive user preferences (default topic, LINE User ID, GitHub Repo URL) can be configured and are saved to `localStorage` via a custom hook `useAppSettings`. Sensitive API keys (Google AI, LINE, GitHub PAT) are managed via server-side environment variables. (UI updated, `saveSettings` action refined, `useAppSettings` hook implemented and integrated)
@@ -108,9 +108,10 @@
     - **[x]** Extend to publishing actions and other card actions (Process, Send to LINE, Publish to GitHub, Generate Image buttons in `ContentCard` now have specific loading spinners).
 - **[x] Strengthen User Feedback and Notifications**:
     - **[x]** Continue consistent and informative use of `useToast` for all user actions.
-- **[ ] Improve Input Validation Messages**:
-    - Make Zod validation error messages more user-friendly in forms.
-    - Consider adding client-side validation for quicker feedback, in addition to server-side validation.
+- **[~] Improve Input Validation Messages**:
+    - **[x]** Make Zod validation error messages more user-friendly in forms (Strategy Section done via `FormMessage`).
+    - **[x]** Add client-side validation for quicker feedback, in addition to server-side validation (Strategy Section done).
+    - **[ ]** Apply client-side validation to Settings page.
 - **[ ] Review Responsive Design and Accessibility (A11y)**:
     - Regularly check layouts on various screen sizes.
     - Ensure proper ARIA attributes and semantic HTML for web accessibility.
@@ -160,7 +161,7 @@
 - **Refined `generateContentSummary` prompt for better handling of HTML extraction and progress reporting, added initial Gemini safety settings, and added few-shot examples.**
 - **Refactored Settings page to manage only non-sensitive user preferences in `localStorage`; sensitive API keys are now expected as server-side environment variables. Created `useAppSettings` hook to manage this client-side storage.**
 - **Implemented core logic for `sendToLineAction` to make API calls to LINE with a basic Flex Message. Client-side updated to pass `lineUserId`. Server-side error parsing from LINE API enhanced.**
-- **Refined `formulateSearchStrategy` prompt to ensure output JSON field names match the Zod schema and added few-shot examples.**
+- **Refined `formulateSearchStrategy` prompt to ensure output JSON field names match the Zod schema and added few-shot examples. Integrated `react-hook-form` for client-side validation.**
 - **Enhanced error handling in `processDiscoveredContent` for catastrophic AI flow failures.**
 - **Implemented placeholder functionality for "Publish to GitHub" including UI button, server action (which now generates Markdown), and status updates.**
 - **Cleaned up a redundant global font-family CSS rule.**

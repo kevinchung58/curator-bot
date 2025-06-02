@@ -5,16 +5,13 @@ import { formulateSearchStrategy, FormulateSearchStrategyInput, FormulateSearchS
 import { generateContentSummary, GenerateContentSummaryInput, GenerateContentSummaryOutput } from '@/ai/flows/generate-content-summary';
 import { generateIllustrativeImage, GenerateIllustrativeImageInput, GenerateIllustrativeImageOutput } from '@/ai/flows/generate-illustrative-image';
 import type { SearchStrategy, ProcessedContent, AppSettings } from './definitions';
+import { StrategyFormSchema } from './definitions'; // Import from definitions
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { format } from 'date-fns';
 import { Octokit } from "@octokit/rest";
 
 // --- Strategy Formulation ---
-const StrategyFormSchema = z.object({
-  curriculum: z.string().min(10, { message: 'Curriculum must be at least 10 characters long.' }),
-});
-
 export type StrategyFormState = {
   message?: string | null;
   errors?: {
@@ -137,11 +134,13 @@ export async function processDiscoveredContent(
 
 
 // --- Settings ---
-const SettingsFormSchema = z.object({
+// Exporting the schema for client-side use
+export const SettingsFormSchema = z.object({
   defaultTopic: z.string().optional(),
   lineUserId: z.string().optional(),
-  githubRepoUrl: z.string().url().optional().or(z.literal('')),
+  githubRepoUrl: z.string().url({ message: "Invalid GitHub Repository URL format. Expected: https://github.com/user/repo" }).optional().or(z.literal('')),
 });
+
 
 export type SettingsFormState = {
   message?: string | null;
@@ -503,3 +502,4 @@ export async function generateImageForContentAction(
     };
   }
 }
+

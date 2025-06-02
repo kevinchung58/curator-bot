@@ -1,4 +1,6 @@
 
+import { z } from 'zod';
+
 export type SearchStrategy = {
   keywords: string[];
   targetSites: string[];
@@ -27,3 +29,8 @@ export type AppSettings = {
   githubRepoUrl?: string;
   defaultTopic?: string;
 };
+
+// Zod schema for client-side and server-side validation of the strategy form
+export const StrategyFormSchema = z.object({
+  curriculum: z.string().min(10, { message: 'Curriculum must be at least 10 characters long.' }),
+});

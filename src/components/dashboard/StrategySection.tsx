@@ -3,11 +3,16 @@
 
 import { useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import type { z } from 'zod';
+
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { submitStrategyForm, type StrategyFormState } from '@/lib/actions';
+import { StrategyFormSchema } from '@/lib/definitions'; // Import from definitions
 import { Lightbulb, Loader2, ListChecks, Share2, Newspaper } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -31,6 +36,19 @@ function SubmitButton() {
 export function StrategySection() {
   const [state, formAction] = useActionState(submitStrategyForm, initialState);
 
+  const form = useForm<z.infer<typeof StrategyFormSchema>>({
+    resolver: zodResolver(StrategyFormSchema),
+    defaultValues: {
+      curriculum: '',
+    },
+  });
+
+  function onValidSubmit(data: z.infer<typeof StrategyFormSchema>) {
+    const formData = new FormData();
+    formData.append('curriculum', data.curriculum);
+    formAction(formData);
+  }
+
   return (
     <Card className="shadow-lg">
       <CardHeader>
@@ -42,37 +60,42 @@ export function StrategySection() {
           Input your teaching curriculum or key topics, and the AI will suggest search keywords, target websites, and content types to monitor.
         </CardDescription>
       </CardHeader>
-      <form action={formAction}>
-        <CardContent className="space-y-4">
-          <div>
-            <Label htmlFor="curriculum" className="text-base">Teaching Curriculum / Topics</Label>
-            <Textarea
-              id="curriculum"
+      
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onValidSubmit)} className="space-y-0"> {/* Removed space-y-4, CardContent will handle it */}
+          <CardContent className="space-y-4">
+            <FormField
+              control={form.control}
               name="curriculum"
-              placeholder="e.g., Introduction to Python programming, data structures, algorithms, web development basics..."
-              rows={6}
-              className="mt-1 text-base"
-              aria-describedby="curriculum-error"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel htmlFor={field.name} className="text-base">Teaching Curriculum / Topics</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      id={field.name}
+                      placeholder="e.g., Introduction to Python programming, data structures, algorithms, web development basics..."
+                      rows={6}
+                      className="mt-1 text-base"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-            {state?.errors?.curriculum && (
-              <p id="curriculum-error" className="mt-1 text-sm text-destructive">
-                {state.errors.curriculum.join(', ')}
+          </CardContent>
+          <CardFooter className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            {state?.message && (
+              <p className={`text-sm ${state.strategy && (!state.errors || Object.keys(state.errors).length === 0) ? 'text-green-600' : 'text-destructive'}`}>
+                {state.message}
               </p>
             )}
-          </div>
-        </CardContent>
-        <CardFooter className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          {state?.message && !state.errors && (
-             <p className={`text-sm ${state.strategy ? 'text-green-600' : 'text-destructive'}`}>{state.message}</p>
-          )}
-           {state?.message && state.errors && (
-             <p className="text-sm text-destructive">{state.message}</p>
-          )}
-          <div className="ml-auto">
-            <SubmitButton />
-          </div>
-        </CardFooter>
-      </form>
+            <div className="ml-auto">
+              <SubmitButton />
+            </div>
+          </CardFooter>
+        </form>
+      </Form>
 
       {state?.strategy && (
         <>
@@ -121,3 +144,4 @@ export function StrategySection() {
     </Card>
   );
 }
+
