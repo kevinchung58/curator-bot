@@ -92,7 +92,7 @@ export function ContentCard({
       </CardHeader>
       <CardContent className="flex-grow space-y-3">
         {content.status === 'processing' && (
-          <div className="flex items-center justify-center h-full">
+          <div className="flex items-center justify-center h-full" aria-live="polite" aria-atomic="true">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
             <p className="ml-2 text-muted-foreground">{content.progressMessage || 'Processing content...'}</p>
           </div>
@@ -100,7 +100,7 @@ export function ContentCard({
         {content.status === 'processed' && (
           <>
             {content.imageStatus === 'generating' && (
-              <div className="flex items-center justify-center p-4 border border-dashed rounded-md">
+              <div className="flex items-center justify-center p-4 border border-dashed rounded-md" aria-live="polite" aria-atomic="true">
                 <Loader2 className="h-6 w-6 animate-spin text-primary" />
                 <p className="ml-2 text-sm text-muted-foreground">Generating image...</p>
               </div>
@@ -117,7 +117,7 @@ export function ContentCard({
               </div>
             )}
             {content.imageStatus === 'error' && (
-              <div className="flex items-center p-4 border border-dashed border-destructive rounded-md text-destructive">
+              <div className="flex items-center p-4 border border-dashed border-destructive rounded-md text-destructive" role="alert">
                 <ImageOff className="h-6 w-6 mr-2" />
                 <p className="text-sm">
                   Image generation failed: {content.imageErrorMessage || 'Unknown error'}
@@ -133,19 +133,19 @@ export function ContentCard({
           </>
         )}
         {content.status === 'error' && (
-           <div className="flex items-center text-destructive">
+           <div className="flex items-center text-destructive" role="alert">
              <AlertCircle className="h-5 w-5 mr-2" />
              <p>{content.errorMessage || content.progressMessage || 'An error occurred during processing.'}</p>
            </div>
         )}
          {content.status === 'sentToLine' && (
-           <div className="flex items-center text-green-600">
+           <div className="flex items-center text-green-600" aria-live="polite">
              <CheckCircle2 className="h-5 w-5 mr-2" />
              <p>Content proposal sent to LINE.</p>
            </div>
         )}
          {content.status === 'publishedToGithub' && (
-           <div className="flex items-center text-purple-600">
+           <div className="flex items-center text-purple-600" aria-live="polite">
              <Github className="h-5 w-5 mr-2" />
              <p>{content.progressMessage || 'Content published to GitHub.'}</p>
            </div>
@@ -204,3 +204,4 @@ export function ContentCard({
     </Card>
   );
 }
+

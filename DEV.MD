@@ -112,9 +112,13 @@
     - **[x]** Make Zod validation error messages more user-friendly in forms (Strategy Section done via `FormMessage`).
     - **[x]** Add client-side validation for quicker feedback, in addition to server-side validation (Strategy Section done).
     - **[x]** Apply client-side validation to Settings page.
-- **[ ] Review Responsive Design and Accessibility (A11y)**:
-    - Regularly check layouts on various screen sizes.
-    - Ensure proper ARIA attributes and semantic HTML for web accessibility.
+- **[~] Review Responsive Design and Accessibility (A11y)**:
+    - **[ ]** Regularly check layouts on various screen sizes.
+    - **[~]** Ensure proper ARIA attributes and semantic HTML for web accessibility.
+        - **[x]** Added `aria-live` for dynamic content updates in `ContentCard` (processing, image generating, sent/published messages).
+        - **[x]** Marked decorative `Logo` in `SiteHeader` as `aria-hidden`.
+        - **[x]** Verified `Alert` components provide `role="alert"` for error messages.
+        - **[x]** Verified form components (`react-hook-form` + ShadCN) manage ARIA attributes for inputs.
 - **[x] CSS Cleanup**: 
     - **[x]** Removed redundant global font-family CSS rule.
     - **[x]** Consolidated `@layer base` directives in `globals.css`.
@@ -126,14 +130,14 @@
         - **[~] Client components (React Error Boundaries for sections).** (Started: ErrorBoundary created and applied to DiscoveredContentSection and StrategySection on dashboard page)
         - **[x]** Server Actions (return clear error states, especially for catastrophic AI flow failures - improved for `generateContentSummary`, `sendToLineAction`, `generateImageForContentAction` with further refinement for AI system errors in `processDiscoveredContent`).
         - **[x]** AI Flows (graceful failure and error reporting - improved for `generateContentSummary`, `generateIllustrativeImageFlow`).
-        - Future Monitoring Agent (robust logging and error recovery).
+        - **[ ]** Future Monitoring Agent (robust logging and error recovery).
 - **[ ] Write Test Code**:
     - **Unit Tests**: For utility functions, key component logic, Zod schemas (e.g., using Jest/Vitest, React Testing Library).
     - **Integration Tests**: For server actions interacting with AI flows and database operations.
     - **E2E Tests (Future)**: Define and automate end-to-end test scenarios for key user workflows (e.g., using Playwright or Cypress).
 - **[x] Code Refactoring**:
     - **[x]** Created `useAppSettings` hook to centralize `localStorage` management for application settings.
-    - Conduct ongoing code refactoring: remove duplicate code, ensure components are well-defined and reusable, improve readability and maintainability.
+    - **[ ]** Conduct ongoing code refactoring: remove duplicate code, ensure components are well-defined and reusable, improve readability and maintainability.
 - **[ ] Dependency Management**:
     - Regularly check and update library versions in `package.json`, addressing any breaking changes.
 
@@ -141,13 +145,13 @@
 
 - **[x] Detail `apphosting.yaml` Configuration**:
     - **[x] Added common resource settings (CPU, memory, minInstances) and comments.**
-    - Review and optimize resource settings for production, especially considering the auto-monitoring agent.
+    - **[ ]** Review and optimize resource settings for production, especially considering the auto-monitoring agent.
 - **[x] Environment Variable Management Strategy**:
     - **[x] Clarification**: Sensitive API keys managed via environment variables. Non-sensitive user preferences use `localStorage` (managed by `useAppSettings` hook).
 - **[x] Logging and Monitoring Strategy**:
     - **[x] Enhanced basic server-side console logging in key actions and AI flows.**
-    - Enhance server-side logging for server actions and AI flow executions.
-    - Set up alerts in Cloud Monitoring for error rates or performance degradation.
+    - **[ ]** Enhance server-side logging for server actions and AI flow executions.
+    - **[ ]** Set up alerts in Cloud Monitoring for error rates or performance degradation.
 
 ## ✅ Completed Major Tasks
 
@@ -178,6 +182,7 @@
 - **Applied client-side validation using `react-hook-form` to the Settings page.**
 - **Introduced a React ErrorBoundary component and applied it to `DiscoveredContentSection` and `StrategySection` on the dashboard page.**
 - **Consolidated `@layer base` directives in `globals.css`.**
+- **Applied A11y improvements: `aria-live` for dynamic content in `ContentCard`, `aria-hidden` for decorative `Logo` in `SiteHeader`.**
 
 ---
 
