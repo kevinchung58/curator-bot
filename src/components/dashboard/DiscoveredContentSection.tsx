@@ -6,32 +6,33 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import { processDiscoveredContent, sendToLineAction, publishToGithubAction } from '@/lib/actions';
+import { processDiscoveredContent, sendToLineAction, publishToGithubAction, generateImageForContentAction } from '@/lib/actions';
 import type { ProcessedContent, AppSettings } from '@/lib/definitions';
 import { ContentCard } from './ContentCard';
 import { PlusCircle, Search, Bot, AlertTriangle, Info, Github, CheckCircle2, XCircle, HelpCircle, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAppSettings } from '@/hooks/useAppSettings';
-import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs
+import { v4 as uuidv4 } from 'uuid'; 
 
 export function DiscoveredContentSection() {
   const [discoveredItems, setDiscoveredItems] = useState<ProcessedContent[]>([]);
   const [newUrl, setNewUrl] = useState('');
   
   const [appSettings, _, isLoadingAppSettings] = useAppSettings();
-  const [currentTopic, setCurrentTopic] = useState('General AI'); // Default fallback
+  const [currentTopic, setCurrentTopic] = useState('General AI'); 
   const [currentLineUserId, setCurrentLineUserId] = useState<string | undefined>(undefined);
   const [currentGithubRepoUrl, setCurrentGithubRepoUrl] = useState<string | undefined>(undefined);
   
   const [processingItemId, setProcessingItemId] = useState<string | null>(null);
   const [sendingItemId, setSendingItemId] = useState<string | null>(null);
   const [publishingItemId, setPublishingItemId] = useState<string | null>(null);
+  const [generatingImageItemId, setGeneratingImageItemId] = useState<string | null>(null);
   
   const { toast } = useToast();
   const [isTransitionGlobalPending, startTransition] = useTransition();
 
   type AgentStatusValue = 'running' | 'degraded' | 'offline' | 'unknown';
-  const [agentStatus, setAgentStatus] = useState<AgentStatusValue>('running'); // Start with running
+  const [agentStatus, setAgentStatus] = useState<AgentStatusValue>('running'); 
   const [agentStatusMessage, setAgentStatusMessage] = useState('Agent is running smoothly (Simulated).');
 
 
@@ -57,7 +58,6 @@ export function DiscoveredContentSection() {
       }
     }
 
-    // Simulate agent status changes for demonstration
     const statuses: Array<{ status: AgentStatusValue, message: string }> = [
       { status: 'running', message: 'Agent is running smoothly (Simulated).' },
       { status: 'degraded', message: 'Agent experiencing some delays (Simulated).' },
@@ -97,7 +97,7 @@ export function DiscoveredContentSection() {
 
     const newItemId = uuidv4();
     setDiscoveredItems(prev => [
-      { id: newItemId, sourceUrl: newUrl, title: '', summary: '', tags: [], status: 'new' },
+      { id: newItemId, sourceUrl: newUrl, title: '', summary: '', tags: [], status: 'new', imageStatus: 'none' },
       ...prev,
     ]);
     setNewUrl('');
@@ -111,14 +111,14 @@ export function DiscoveredContentSection() {
     startTransition(async () => {
       const result = await processDiscoveredContent(articleId, articleUrl, currentTopic);
       if (result.processedContent) {
-        setDiscoveredItems(prev => prev.map(item => item.id === articleId ? { ...result.processedContent! } : item));
+        setDiscoveredItems(prev => prev.map(item => item.id === articleId ? { ...result.processedContent!, imageStatus: 'none' } : item));
         toast({
           title: result.processedContent.status === 'processed' ? 'Success' : 'Processing Issue',
           description: result.message || (result.processedContent.status === 'processed' ? 'Content processed.' : 'An issue occurred.'),
           variant: result.processedContent.status === 'error' ? 'destructive' : 'default',
         });
       } else {
-        setDiscoveredItems(prev => prev.map(item => item.id === articleId ? { ...item, status: 'error', errorMessage: result.error, progressMessage: 'Processing failed catastrophically.' } : item));
+        setDiscoveredItems(prev => prev.map(item => item.id === articleId ? { ...item, status: 'error', errorMessage: result.error, progressMessage: 'Processing failed catastrophically.', imageStatus: 'none' } : item));
         toast({ title: 'Error Processing', description: result.error, variant: 'destructive' });
       }
       setProcessingItemId(null);
@@ -169,6 +169,32 @@ export function DiscoveredContentSection() {
     });
   };
 
+  const handleGenerateImage = (contentId: string, title: string, summary: string) => {
+    setGeneratingImageItemId(contentId);
+    setDiscoveredItems(prev => prev.map(item => 
+      item.id === contentId ? { ...item, imageStatus: 'generating', imageErrorMessage: undefined } : item
+    ));
+
+    startTransition(async () => {
+      const result = await generateImageForContentAction(contentId, title, summary);
+      if (result.updatedContentPartial) {
+        setDiscoveredItems(prev => prev.map(item =>
+          item.id === contentId ? { ...item, ...result.updatedContentPartial } : item
+        ));
+        toast({
+          title: result.updatedContentPartial.imageStatus === 'generated' ? 'Image Generated' : 'Image Generation Issue',
+          description: result.message || (result.updatedContentPartial.imageStatus === 'generated' ? 'Illustrative image created.' : 'An issue occurred.'),
+          variant: result.updatedContentPartial.imageStatus === 'error' ? 'destructive' : 'default',
+        });
+      } else { // Should not happen if action always returns updatedContentPartial on error
+        setDiscoveredItems(prev => prev.map(item =>
+          item.id === contentId ? { ...item, imageStatus: 'error', imageErrorMessage: result.error || 'Unknown error during image generation.' } : item
+        ));
+        toast({ title: 'Error Generating Image', description: result.error, variant: 'destructive' });
+      }
+      setGeneratingImageItemId(null);
+    });
+  };
 
   const handleDismissItem = (articleId: string) => {
     setDiscoveredItems(prev => prev.filter(item => item.id !== articleId));
@@ -246,10 +272,12 @@ export function DiscoveredContentSection() {
                   onProcess={handleProcessContent}
                   onSendToLine={handleSendToLine}
                   onPublishToGithub={handlePublishToGithub}
+                  onGenerateImage={handleGenerateImage}
                   onDismiss={handleDismissItem}
                   isProcessingThisCard={processingItemId === item.id}
                   isSendingThisCard={sendingItemId === item.id}
                   isPublishingThisCard={publishingItemId === item.id}
+                  isGeneratingImageForThisCard={generatingImageItemId === item.id}
                   isTransitionGlobalPending={isTransitionGlobalPending}
                   defaultTopic={currentTopic}
                 />

@@ -3,6 +3,7 @@
 
 import { formulateSearchStrategy, FormulateSearchStrategyInput, FormulateSearchStrategyOutput } from '@/ai/flows/formulate-search-strategy';
 import { generateContentSummary, GenerateContentSummaryInput, GenerateContentSummaryOutput } from '@/ai/flows/generate-content-summary';
+import { generateIllustrativeImage, GenerateIllustrativeImageInput, GenerateIllustrativeImageOutput } from '@/ai/flows/generate-illustrative-image';
 import type { SearchStrategy, ProcessedContent, AppSettings } from './definitions';
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
@@ -105,6 +106,7 @@ export async function processDiscoveredContent(
       status: finalStatus,
       progressMessage: result.progress,
       errorMessage: errorMessage,
+      imageStatus: 'none', // Initialize image status
     };
 
     return {
@@ -116,7 +118,7 @@ export async function processDiscoveredContent(
     console.error('Error processing content (AI flow system error):', error);
     const systemErrorMessage = error.message || 'An unknown AI system error occurred during content processing.';
     return {
-      error: `Error: Content processing failed due to an AI system issue.`, // Main toast message
+      error: `Error: Content processing failed due to an AI system issue.`, 
       articleId: articleId,
       processedContent: {
         id: articleId,
@@ -127,6 +129,7 @@ export async function processDiscoveredContent(
         status: 'error',
         progressMessage: `AI system error: ${systemErrorMessage}`,
         errorMessage: `AI system error: ${systemErrorMessage}`,
+        imageStatus: 'none',
       }
     };
   }
@@ -202,7 +205,7 @@ export async function sendToLineAction(
         backgroundColor: '#00B900',
         paddingAll: 'md',
       },
-      hero: content.title ? { // Only add hero if there's a title that isn't a failure message
+      hero: content.title ? { 
         type: 'box',
         layout: 'vertical',
         contents: [
@@ -300,15 +303,14 @@ function slugify(text: string): string {
     .toString()
     .toLowerCase()
     .trim()
-    .replace(/\s+/g, '-') // Replace spaces with -
-    .replace(/[^\w-]+/g, '') // Remove all non-word chars (alphanumeric, underscore, hyphen)
-    .replace(/--+/g, '-') // Replace multiple - with single -
-    .substring(0, 75); // Limit length for filename
+    .replace(/\s+/g, '-') 
+    .replace(/[^\w-]+/g, '') 
+    .replace(/--+/g, '-') 
+    .substring(0, 75); 
 }
 
 function generateMarkdownContent(content: ProcessedContent): string {
   const today = format(new Date(), 'yyyy-MM-dd');
-  // Ensure title is a string and escape quotes for YAML frontmatter
   const frontmatterTitle = typeof content.title === 'string' ? content.title.replace(/"/g, '\\"') : 'Untitled Content';
   
   const frontmatter = `---
@@ -319,6 +321,7 @@ ${content.tags.map(tag => `  - ${tag}`).join('\n')}
 date_processed: "${today}"
 curated_by: "Content Curator Bot"
 content_id: "${content.id}"
+${content.imageUrl ? `image_generated_data_uri: "See content for data URI (too long for frontmatter)"\nimage_ai_hint: "${content.imageAiHint || ''}"`: ''}
 ---`;
 
   const body = `
@@ -330,6 +333,7 @@ content_id: "${content.id}"
 
 ${content.summary || 'No summary available.'}
 
+${content.imageUrl ? `\n## Generated Image\n\n(Image is embedded in the application, data URI not repeated here for brevity)\nHint: ${content.imageAiHint || 'N/A'}\n` : ''}
 ---
 *Curated by Content Curator Bot on ${today}*
 `;
@@ -435,5 +439,67 @@ export async function publishToGithubAction(
       errorMessage = `GitHub API Error: ${error.message}`;
     }
     return { success: false, message: errorMessage };
+  }
+}
+
+
+// --- Image Generation for Content ---
+export type GenerateImageState = {
+  message?: string | null;
+  updatedContentPartial?: Pick<ProcessedContent, 'id' | 'imageUrl' | 'imageAiHint' | 'imageStatus' | 'imageErrorMessage'>;
+  error?: string | null;
+  contentId?: string | null;
+};
+
+export async function generateImageForContentAction(
+  contentId: string,
+  title: string,
+  summary: string
+): Promise<GenerateImageState> {
+  console.log(`Generating image for content ID: ${contentId}, Title: ${title.substring(0, 50)}...`);
+
+  if (!title || !summary) {
+    return {
+      error: 'Title and summary are required to generate an image.',
+      contentId,
+      updatedContentPartial: {
+        id: contentId,
+        imageStatus: 'error',
+        imageErrorMessage: 'Title and summary are required.',
+      }
+    };
+  }
+
+  try {
+    const input: GenerateIllustrativeImageInput = { title, summary };
+    const result: GenerateIllustrativeImageOutput = await generateIllustrativeImage(input);
+    
+    const hintKeywords = title.toLowerCase().split(/\s+/).filter(Boolean).slice(0, 2).join(' ');
+
+    return {
+      message: 'Image generated successfully.',
+      contentId,
+      updatedContentPartial: {
+        id: contentId,
+        imageUrl: result.imageDataUri,
+        imageAiHint: hintKeywords || 'illustration',
+        imageStatus: 'generated',
+        imageErrorMessage: undefined,
+      },
+    };
+  } catch (error: any) {
+    console.error(`Error generating image for content ID ${contentId}:`, error);
+    const errorMessage = error.message || 'An unknown error occurred during image generation.';
+    return {
+      error: `Failed to generate image: ${errorMessage}`,
+      contentId,
+      updatedContentPartial: {
+        id: contentId,
+        imageUrl: undefined,
+        imageAiHint: undefined,
+        imageStatus: 'error',
+        imageErrorMessage: errorMessage,
+      },
+    };
   }
 }

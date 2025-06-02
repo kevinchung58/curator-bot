@@ -5,19 +5,22 @@ import type { ProcessedContent } from '@/lib/definitions';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ExternalLink, Loader2, Send, AlertCircle, CheckCircle2, Trash2, Github } from 'lucide-react';
+import { ExternalLink, Loader2, Send, AlertCircle, CheckCircle2, Trash2, Github, ImagePlus, ImageOff } from 'lucide-react';
 import Link from 'next/link';
 import React from 'react';
+import NextImage from 'next/image'; // Renamed to avoid conflict if Image is imported from lucide-react
 
 type ContentCardProps = {
   content: ProcessedContent;
   onProcess: (articleId: string, articleUrl: string) => void;
   onSendToLine: (content: ProcessedContent) => void;
   onPublishToGithub: (content: ProcessedContent) => void;
+  onGenerateImage: (contentId: string, title: string, summary: string) => void;
   onDismiss: (articleId: string) => void;
   isProcessingThisCard: boolean;
   isSendingThisCard: boolean;
   isPublishingThisCard: boolean;
+  isGeneratingImageForThisCard: boolean;
   isTransitionGlobalPending: boolean;
   defaultTopic: string;
 };
@@ -26,11 +29,13 @@ export function ContentCard({
   content, 
   onProcess, 
   onSendToLine, 
-  onPublishToGithub, 
+  onPublishToGithub,
+  onGenerateImage,
   onDismiss, 
   isProcessingThisCard,
   isSendingThisCard,
   isPublishingThisCard,
+  isGeneratingImageForThisCard,
   isTransitionGlobalPending,
   defaultTopic 
 }: ContentCardProps) {
@@ -53,6 +58,12 @@ export function ContentCard({
     }
   }
 
+  const handleGenerateImage = () => {
+    if (content.status === 'processed' && content.title && content.summary && (!content.imageStatus || content.imageStatus === 'none' || content.imageStatus === 'error' || content.imageStatus === 'generated')) {
+      onGenerateImage(content.id, content.title, content.summary);
+    }
+  };
+
   const handleDismiss = () => {
     onDismiss(content.id);
   }
@@ -60,6 +71,7 @@ export function ContentCard({
   const showProcessSpinner = isProcessingThisCard && isTransitionGlobalPending;
   const showSendSpinner = isSendingThisCard && isTransitionGlobalPending;
   const showPublishSpinner = isPublishingThisCard && isTransitionGlobalPending;
+  const showGenerateImageSpinner = isGeneratingImageForThisCard && isTransitionGlobalPending;
 
   return (
     <Card className="shadow-md hover:shadow-lg transition-shadow duration-300 flex flex-col h-full">
@@ -78,7 +90,7 @@ export function ContentCard({
           </Link>
         </CardDescription>
       </CardHeader>
-      <CardContent className="flex-grow">
+      <CardContent className="flex-grow space-y-3">
         {content.status === 'processing' && (
           <div className="flex items-center justify-center h-full">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -87,7 +99,32 @@ export function ContentCard({
         )}
         {content.status === 'processed' && (
           <>
-            <p className="text-sm text-muted-foreground mb-2 line-clamp-3">{content.summary}</p>
+            {content.imageStatus === 'generating' && (
+              <div className="flex items-center justify-center p-4 border border-dashed rounded-md">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                <p className="ml-2 text-sm text-muted-foreground">Generating image...</p>
+              </div>
+            )}
+            {content.imageStatus === 'generated' && content.imageUrl && (
+              <div className="relative aspect-video w-full overflow-hidden rounded-md border">
+                <NextImage
+                  src={content.imageUrl} 
+                  alt={content.title || 'Generated illustration'}
+                  layout="fill"
+                  objectFit="cover"
+                  data-ai-hint={content.imageAiHint || 'illustration'}
+                />
+              </div>
+            )}
+            {content.imageStatus === 'error' && (
+              <div className="flex items-center p-4 border border-dashed border-destructive rounded-md text-destructive">
+                <ImageOff className="h-6 w-6 mr-2" />
+                <p className="text-sm">
+                  Image generation failed: {content.imageErrorMessage || 'Unknown error'}
+                </p>
+              </div>
+            )}
+            <p className="text-sm text-muted-foreground line-clamp-3">{content.summary}</p>
             <div className="flex flex-wrap gap-2">
               {content.tags.map((tag) => (
                 <Badge key={tag} variant="secondary">{tag}</Badge>
@@ -114,7 +151,7 @@ export function ContentCard({
            </div>
         )}
       </CardContent>
-      <CardFooter className="flex flex-col sm:flex-row gap-2 justify-end pt-4 border-t flex-wrap">
+      <CardFooter className="flex flex-col sm:flex-row gap-2 justify-end pt-4 border-t flex-wrap items-center">
         {(content.status === 'new' || content.status === 'error') && (
           <Button onClick={handleProcess} disabled={isTransitionGlobalPending} variant="outline" size="sm">
             {showProcessSpinner ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
@@ -131,6 +168,32 @@ export function ContentCard({
               {showPublishSpinner ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Github className="mr-2 h-4 w-4" />}
               Publish to GitHub
             </Button>
+             {(!content.imageStatus || content.imageStatus === 'none' || content.imageStatus === 'error') && (
+              <Button
+                onClick={handleGenerateImage}
+                disabled={isTransitionGlobalPending || !content.title || !content.summary}
+                variant="outline"
+                size="sm"
+                className="border-blue-500 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                title={!content.title || !content.summary ? "Cannot generate image without title and summary" : "Generate Illustrative Image"}
+              >
+                {showGenerateImageSpinner ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ImagePlus className="mr-2 h-4 w-4" />}
+                Generate Image
+              </Button>
+            )}
+            {content.imageStatus === 'generated' && content.imageUrl && (
+              <Button
+                onClick={handleGenerateImage} 
+                disabled={isTransitionGlobalPending || !content.title || !content.summary}
+                variant="outline"
+                size="sm"
+                className="border-blue-500 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                title="Re-generate Illustrative Image"
+              >
+                {showGenerateImageSpinner ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ImagePlus className="mr-2 h-4 w-4" />}
+                Re-Generate Image
+              </Button>
+            )}
           </>
         )}
          <Button onClick={handleDismiss} variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive" disabled={isTransitionGlobalPending}>

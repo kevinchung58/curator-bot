@@ -14,6 +14,10 @@ export type ProcessedContent = {
   status: 'new' | 'processing' | 'processed' | 'error' | 'sentToLine' | 'publishedToGithub';
   progressMessage?: string;
   errorMessage?: string;
+  imageUrl?: string; // Will store the data URI
+  imageAiHint?: string; // For the data-ai-hint attribute, based on title/summary
+  imageStatus?: 'none' | 'generating' | 'generated' | 'error';
+  imageErrorMessage?: string;
 };
 
 // AppSettings now only includes non-sensitive, user-configurable preferences.
