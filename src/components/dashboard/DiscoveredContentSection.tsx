@@ -167,7 +167,15 @@ export function DiscoveredContentSection() {
       const result = await publishToGithubAction(content, currentGithubRepoUrl);
       if (result.success) {
         setDiscoveredItems(prev => prev.map(item => item.id === content.id ? {...item, status: 'publishedToGithub', progressMessage: result.message } : item));
-        toast({ title: 'Published to GitHub', description: result.message });
+        const toastDescription = result.fileUrl ? (
+          <span>
+            {result.message}.{' '}
+            <a href={result.fileUrl} target="_blank" rel="noopener noreferrer" className="underline hover:text-primary font-semibold">
+              View file
+            </a>
+          </span>
+        ) : result.message;
+        toast({ title: 'Published to GitHub', description: toastDescription });
       } else {
         toast({ title: 'GitHub Publish Error', description: result.message, variant: 'destructive' });
       }
@@ -310,3 +318,5 @@ export function DiscoveredContentSection() {
     </Card>
   );
 }
+
+    
