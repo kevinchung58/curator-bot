@@ -31,19 +31,20 @@ export async function submitStrategyForm(prevState: StrategyFormState | undefine
       message: 'Validation Error: Please check your input.',
     };
   }
-  console.log('Formulating search strategy for curriculum excerpt:', validatedFields.data.curriculum.substring(0,100) + "...");
+  console.log('[Action] submitStrategyForm: Formulating search strategy for curriculum excerpt:', validatedFields.data.curriculum.substring(0,100) + "...");
 
   try {
     const input: FormulateSearchStrategyInput = {
       curriculum: validatedFields.data.curriculum,
     };
     const result: FormulateSearchStrategyOutput = await formulateSearchStrategy(input);
+    console.log('[Action] submitStrategyForm: Strategy formulated successfully.');
     return {
       message: 'Search strategy formulated successfully.',
       strategy: result,
     };
   } catch (error) {
-    console.error('Error formulating search strategy:', error);
+    console.error('[Action] submitStrategyForm: Error formulating search strategy:', error);
     return {
       message: 'Error: Could not formulate search strategy.',
     };
@@ -77,7 +78,7 @@ export async function processDiscoveredContent(
       articleId: articleId,
     };
   }
-  console.log('Processing content for URL:', validatedFields.data.articleUrl, 'Topic:', validatedFields.data.topic);
+  console.log('[Action] processDiscoveredContent: Processing content for URL:', validatedFields.data.articleUrl, 'Topic:', validatedFields.data.topic);
 
   try {
     const input: GenerateContentSummaryInput = {
@@ -85,6 +86,8 @@ export async function processDiscoveredContent(
       topic: validatedFields.data.topic,
     };
     const result: GenerateContentSummaryOutput = await generateContentSummary(input);
+    console.log('[Action] processDiscoveredContent: Summary generation result - Title:', result.title.substring(0,50) + "...", 'Progress:', result.progress);
+
 
     let finalStatus: ProcessedContent['status'] = 'processed';
     let errorMessage: string | undefined = undefined;
@@ -112,7 +115,7 @@ export async function processDiscoveredContent(
       articleId: articleId,
     };
   } catch (error: any) {
-    console.error('Error processing content (AI flow system error):', error);
+    console.error('[Action] processDiscoveredContent: Error processing content (AI flow system error):', error);
     const systemErrorMessage = error.message || 'An unknown AI system error occurred during content processing.';
     return {
       error: `Error: Content processing failed due to an AI system issue.`, 
@@ -152,7 +155,7 @@ export async function saveSettings(prevState: SettingsFormState | undefined, for
       message: 'Validation Error: Please check your input.',
     };
   }
-  console.log("User preferences received (to be saved by client):", validatedFields.data);
+  console.log("[Action] saveSettings: User preferences received (to be saved by client):", validatedFields.data);
 
   return {
     message: 'User preferences updated. They will be saved in your browser.',
@@ -165,14 +168,15 @@ export async function sendToLineAction(
   content: ProcessedContent,
   lineUserId: string | undefined | null
 ): Promise<{ success: boolean; message: string }> {
-  console.log('Attempting to send content to LINE User ID:', lineUserId, 'Title:', content.title);
+  console.log('[Action] sendToLineAction: Attempting to send content to LINE User ID:', lineUserId, 'Title:', content.title.substring(0,50)+"...");
   if (!lineUserId) {
+    console.warn('[Action] sendToLineAction: LINE User ID not provided.');
     return { success: false, message: 'LINE User ID not provided. Please configure it in Settings.' };
   }
 
   const lineChannelAccessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
   if (!lineChannelAccessToken) {
-    console.error('LINE_CHANNEL_ACCESS_TOKEN not configured on the server.');
+    console.error('[Action] sendToLineAction: LINE_CHANNEL_ACCESS_TOKEN not configured on the server.');
     return { success: false, message: 'LINE Channel Access Token not configured on the server.' };
   }
 
@@ -261,27 +265,27 @@ export async function sendToLineAction(
     });
 
     if (!response.ok) {
-      let errorMessage = `LINE API Error (${response.status}): `;
+      let errorMessageText = `LINE API Error (${response.status}): `;
       try {
         const errorBody = await response.json();
-        errorMessage += errorBody.message || 'Unknown error';
+        errorMessageText += errorBody.message || 'Unknown error';
         if (errorBody.details && Array.isArray(errorBody.details)) {
           const details = errorBody.details.map((detail: any) => `${detail.property}: ${detail.message}`).join(', ');
           if (details) {
-            errorMessage += ` (Details: ${details})`;
+            errorMessageText += ` (Details: ${details})`;
           }
         }
-        console.error('LINE API Error:', response.status, JSON.stringify(errorBody, null, 2));
+        console.error('[Action] sendToLineAction: LINE API Error:', response.status, JSON.stringify(errorBody, null, 2));
       } catch (parseError) {
-        errorMessage += 'Failed to parse error response from LINE API.';
-        console.error('LINE API Error: Failed to parse error response. Status:', response.status);
+        errorMessageText += 'Failed to parse error response from LINE API.';
+        console.error('[Action] sendToLineAction: LINE API Error: Failed to parse error response. Status:', response.status);
       }
-      return { success: false, message: errorMessage };
+      return { success: false, message: errorMessageText };
     }
-
+    console.log(`[Action] sendToLineAction: Content "${content.title || 'proposal'}" sent to LINE successfully.`);
     return { success: true, message: `Content "${content.title || 'proposal'}" sent to LINE successfully.` };
   } catch (error: any) {
-    console.error('Error sending to LINE:', error);
+    console.error('[Action] sendToLineAction: Error sending to LINE:', error);
     return { success: false, message: `Failed to send to LINE: ${error.message}` };
   }
 }
@@ -336,19 +340,21 @@ export async function publishToGithubAction(
   content: ProcessedContent,
   githubRepoUrl: string | undefined | null
 ): Promise<{ success: boolean; message: string; fileUrl?: string }> {
-  console.log('Attempting to publish to GitHub:', content.title, githubRepoUrl);
+  console.log('[Action] publishToGithubAction: Attempting to publish content ID:', content.id, 'Title:', content.title.substring(0,50)+"...", 'to Repo:', githubRepoUrl);
 
   if (!githubRepoUrl) {
+    console.warn('[Action] publishToGithubAction: GitHub Repository URL not configured.');
     return { success: false, message: 'GitHub Repository URL not configured in Settings.' };
   }
   const githubPat = process.env.GITHUB_PAT;
   if (!githubPat) {
-    console.error('GITHUB_PAT not configured on the server.');
+    console.error('[Action] publishToGithubAction: GITHUB_PAT not configured on the server.');
     return { success: false, message: 'GitHub Personal Access Token (GITHUB_PAT) not configured on the server.' };
   }
 
   const repoUrlMatch = githubRepoUrl.match(/github\.com\/([^\/]+)\/([^\/.]+)(\.git)?$/i);
   if (!repoUrlMatch || !repoUrlMatch[1] || !repoUrlMatch[2]) {
+     console.warn('[Action] publishToGithubAction: Invalid GitHub Repository URL format.');
     return { success: false, message: 'Invalid GitHub Repository URL format. Expected: https://github.com/owner/repo' };
   }
   const owner = repoUrlMatch[1];
@@ -364,11 +370,11 @@ export async function publishToGithubAction(
   const fileName = `${format(new Date(), 'yyyy-MM-dd')}-${slugifiedTitle}-${shortId}.md`;
   const filePath = `curated-content/${fileName}`;
 
-  const commitMessage = `feat: Add/Update curated content "${content.title || 'Untitled'}"`;
+  const commitMessage = `feat: Add/Update curated content "${content.title || 'Untitled'}" (ID: ${shortId})`;
   let existingFileSha: string | undefined = undefined;
 
   try {
-    console.log(`Checking for existing file at: ${owner}/${repo}/${filePath}`);
+    console.log(`[Action] publishToGithubAction: Checking for existing file at: ${owner}/${repo}/${filePath}`);
     const { data: existingFileData } = await octokit.rest.repos.getContent({
       owner,
       repo,
@@ -376,18 +382,19 @@ export async function publishToGithubAction(
     });
     if (existingFileData && !Array.isArray(existingFileData) && existingFileData.type === 'file') {
       existingFileSha = existingFileData.sha;
-      console.log(`Existing file found with SHA: ${existingFileSha}`);
+      console.log(`[Action] publishToGithubAction: Existing file found with SHA: ${existingFileSha}. Path: ${filePath}`);
     }
   } catch (error: any) {
     if (error.status !== 404) {
-      console.error(`Error checking existing file content for ${filePath}:`, error);
+      console.error(`[Action] publishToGithubAction: Error checking existing file content for ${filePath}:`, error);
       return { success: false, message: `GitHub API Error: Could not verify existing file. ${error.message}` };
     }
-    console.log(`File ${filePath} not found. Will create a new one.`);
+    console.log(`[Action] publishToGithubAction: File ${filePath} not found. Will create a new one.`);
   }
 
   try {
-    console.log(`${existingFileSha ? 'Updating' : 'Creating'} file ${filePath} on GitHub.`);
+    const actionVerb = existingFileSha ? 'Updating' : 'Creating';
+    console.log(`[Action] publishToGithubAction: ${actionVerb} file ${filePath} on GitHub repo ${owner}/${repo}.`);
     const { data: result } = await octokit.rest.repos.createOrUpdateFileContents({
       owner,
       repo,
@@ -406,30 +413,29 @@ export async function publishToGithubAction(
     });
 
     const fileUrl = result.content?.html_url || `https://github.com/${owner}/${repo}/blob/main/${filePath}`; 
-    const actionVerb = existingFileSha ? 'updated' : 'created';
-    console.log(`File ${actionVerb} successfully: ${fileUrl}`);
+    console.log(`[Action] publishToGithubAction: File ${existingFileSha ? 'updated' : 'created'} successfully: ${fileUrl}`);
 
     return { 
       success: true, 
-      message: `Content "${content.title || 'Untitled'}" ${actionVerb} on GitHub: ${fileName}`,
+      message: `Content "${content.title || 'Untitled'}" ${existingFileSha ? 'updated' : 'created'} on GitHub: ${fileName}`,
       fileUrl: fileUrl 
     };
 
   } catch (error: any) {
-    console.error('GitHub API Error during createOrUpdateFileContents:', error);
-    let errorMessage = 'Failed to publish to GitHub.';
+    console.error('[Action] publishToGithubAction: GitHub API Error during createOrUpdateFileContents:', error);
+    let errorMessageText = 'Failed to publish to GitHub.';
     if (error.status === 401) {
-      errorMessage = 'GitHub API Error: Bad credentials (Invalid GITHUB_PAT or insufficient permissions).';
+      errorMessageText = 'GitHub API Error: Bad credentials (Invalid GITHUB_PAT or insufficient permissions).';
     } else if (error.status === 404) {
-      errorMessage = `GitHub API Error: Repository not found or path "${filePath}" issue. Ensure 'curated-content' directory exists.`;
+      errorMessageText = `GitHub API Error: Repository not found or path "${filePath}" issue. Ensure 'curated-content' directory exists.`;
     } else if (error.status === 409) {
-       errorMessage = `GitHub API Error: Conflict detected. If updating, the file might have changed. Path: ${filePath}`;
+       errorMessageText = `GitHub API Error: Conflict detected. If updating, the file might have changed. Path: ${filePath}`;
     } else if (error.status === 422 && error.message?.toLowerCase().includes("sha")) {
-      errorMessage = `GitHub API Error: Invalid SHA or conflict updating file. It might have been changed since last check. Path: ${filePath}`;
+      errorMessageText = `GitHub API Error: Invalid SHA or conflict updating file. It might have been changed since last check. Path: ${filePath}`;
     } else if (error.message) {
-      errorMessage = `GitHub API Error: ${error.message}`;
+      errorMessageText = `GitHub API Error: ${error.message}`;
     }
-    return { success: false, message: errorMessage };
+    return { success: false, message: errorMessageText };
   }
 }
 
@@ -447,9 +453,10 @@ export async function generateImageForContentAction(
   title: string,
   summary: string
 ): Promise<GenerateImageState> {
-  console.log(`Generating image for content ID: ${contentId}, Title: ${title.substring(0, 50)}...`);
+  console.log(`[Action] generateImageForContentAction: Generating image for content ID: ${contentId}, Title: ${title.substring(0, 50)}...`);
 
   if (!title || !summary) {
+    console.warn(`[Action] generateImageForContentAction: Title or summary missing for content ID ${contentId}.`);
     return {
       error: 'Title and summary are required to generate an image.',
       contentId,
@@ -466,7 +473,7 @@ export async function generateImageForContentAction(
     const result: GenerateIllustrativeImageOutput = await generateIllustrativeImage(input);
     
     const hintKeywords = title.toLowerCase().split(/\s+/).filter(Boolean).slice(0, 2).join(' ');
-
+    console.log(`[Action] generateImageForContentAction: Image generated successfully for content ID ${contentId}. AI Hint: ${hintKeywords}`);
     return {
       message: 'Image generated successfully.',
       contentId,
@@ -479,17 +486,17 @@ export async function generateImageForContentAction(
       },
     };
   } catch (error: any) {
-    console.error(`Error generating image for content ID ${contentId}:`, error);
-    const errorMessage = error.message || 'An unknown error occurred during image generation.';
+    console.error(`[Action] generateImageForContentAction: Error generating image for content ID ${contentId}:`, error);
+    const errorMessageText = error.message || 'An unknown error occurred during image generation.';
     return {
-      error: `Failed to generate image: ${errorMessage}`,
+      error: `Failed to generate image: ${errorMessageText}`,
       contentId,
       updatedContentPartial: {
         id: contentId,
         imageUrl: undefined,
         imageAiHint: undefined,
         imageStatus: 'error',
-        imageErrorMessage: errorMessage,
+        imageErrorMessage: errorMessageText,
       },
     };
   }

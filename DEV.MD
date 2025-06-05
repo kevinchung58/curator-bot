@@ -3,12 +3,12 @@
 
 ## 🚀 Key Feature Status
 
-- **Strategy Formulation**: When a user inputs a curriculum/topic, the AI suggests relevant search keywords, target websites, and content types to monitor. (Basic implementation complete, prompt refined for schema adherence and few-shot examples added. Client-side validation added via `react-hook-form`.)
-- **Content Discovery & Processing**: When a user adds a URL, the content is summarized, and tags are generated. (Basic implementation complete, uses local storage for discovered items, processing via AI flow, now with a Genkit tool for web fetching, basic progress display, and refined AI prompt for summarization with safety settings and few-shot examples.)
+- **[x] Strategy Formulation**: When a user inputs a curriculum/topic, the AI suggests relevant search keywords, target websites, and content types to monitor. (Basic implementation complete, prompt refined for schema adherence and few-shot examples added. Client-side validation added via `react-hook-form`.)
+- **[x] Content Discovery & Processing**: When a user adds a URL, the content is summarized, and tags are generated. (Basic implementation complete, uses local storage for discovered items, processing via AI flow, now with a Genkit tool for web fetching, basic progress display, and refined AI prompt for summarization with safety settings and few-shot examples.)
 - **[x] Image Generation**: For processed content, users can trigger AI-powered image generation to create illustrative visuals. (Genkit flow, server action, and UI integration complete. Displays image, loading, and error states.)
-- **Settings**: Non-sensitive user preferences (default topic, LINE User ID, GitHub Repo URL) can be configured and are saved to `localStorage` via a custom hook `useAppSettings`. Sensitive API keys (Google AI, LINE, GitHub PAT) are managed via server-side environment variables. (UI updated, `saveSettings` action refined, `useAppSettings` hook implemented and integrated. Client-side validation added.)
-- **Send to LINE**: Button exists. Core logic to make API call to LINE with a Flex Message implemented in server action. Client-side logic to retrieve and pass `lineUserId` also implemented. Actual sending depends on valid server-side `LINE_CHANNEL_ACCESS_TOKEN` and client-side `lineUserId` configuration. Server-side error parsing from LINE API enhanced.
-- **Publish to GitHub**: Button exists for processed content. Calls a server action that now generates Markdown for the content and creates/updates files in the specified GitHub repository using Octokit. Client-side logic retrieves `githubRepoUrl` and handles success/failure toasts. `GITHUB_PAT` environment variable is required.
+- **[x] Settings**: Non-sensitive user preferences (default topic, LINE User ID, GitHub Repo URL) can be configured and are saved to `localStorage` via a custom hook `useAppSettings`. Sensitive API keys (Google AI, LINE, GitHub PAT) are managed via server-side environment variables. (UI updated, `saveSettings` action refined, `useAppSettings` hook implemented and integrated. Client-side validation added.)
+- **[x] Send to LINE**: Button exists. Core logic to make API call to LINE with a Flex Message implemented in server action. Client-side logic to retrieve and pass `lineUserId` also implemented. Actual sending depends on valid server-side `LINE_CHANNEL_ACCESS_TOKEN` and client-side `lineUserId` configuration. Server-side error parsing from LINE API enhanced.
+- **[x] Publish to GitHub**: Button exists for processed content. Calls a server action that now generates Markdown for the content and creates/updates files in the specified GitHub repository using Octokit. Client-side logic retrieves `githubRepoUrl` and handles success/failure toasts. `GITHUB_PAT` environment variable is required.
 
 ## 📝 TODO List (English)
 
@@ -113,8 +113,8 @@
     - **[x]** Add client-side validation for quicker feedback, in addition to server-side validation (Strategy Section done).
     - **[x]** Apply client-side validation to Settings page.
 - **[~] Review Responsive Design and Accessibility (A11y)**:
-    - **[ ]** Regularly check layouts on various screen sizes.
-    - **[~]** Ensure proper ARIA attributes and semantic HTML for web accessibility.
+    - **[ ]** Regularly check layouts on various screen sizes. (Manual testing required)
+    - **[~]** Ensure proper ARIA attributes and semantic HTML for web accessibility. (Specific improvements made, ongoing concern)
         - **[x]** Added `aria-live` for dynamic content updates in `ContentCard` (processing, image generating, sent/published messages).
         - **[x]** Marked decorative `Logo` in `SiteHeader` as `aria-hidden`.
         - **[x]** Verified `Alert` components provide `role="alert"` for error messages.
@@ -127,62 +127,54 @@
 
 - **[~] Overall Error Handling Enhancement**:
     - Implement comprehensive error handling across:
-        - **[~] Client components (React Error Boundaries for sections).** (Started: ErrorBoundary created and applied to DiscoveredContentSection and StrategySection on dashboard page)
+        - **[x] Client components (React Error Boundaries for sections).** (Applied to DiscoveredContentSection and StrategySection on dashboard page)
         - **[x]** Server Actions (return clear error states, especially for catastrophic AI flow failures - improved for `generateContentSummary`, `sendToLineAction`, `generateImageForContentAction` with further refinement for AI system errors in `processDiscoveredContent`).
         - **[x]** AI Flows (graceful failure and error reporting - improved for `generateContentSummary`, `generateIllustrativeImageFlow`).
-        - **[ ]** Future Monitoring Agent (robust logging and error recovery).
-- **[ ] Write Test Code**:
-    - **Unit Tests**: For utility functions, key component logic, Zod schemas (e.g., using Jest/Vitest, React Testing Library).
-    - **Integration Tests**: For server actions interacting with AI flows and database operations.
-    - **E2E Tests (Future)**: Define and automate end-to-end test scenarios for key user workflows (e.g., using Playwright or Cypress).
-- **[x] Code Refactoring**:
+        - **[ ]** Future Monitoring Agent (robust logging and error recovery). (Depends on agent implementation)
+- **[ ] Write Test Code**: (Significant effort, out of scope for current pass)
+    - **[ ]** Unit Tests: For utility functions, key component logic, Zod schemas (e.g., using Jest/Vitest, React Testing Library).
+    - **[ ]** Integration Tests: For server actions interacting with AI flows and database operations.
+    - **[ ]** E2E Tests (Future): Define and automate end-to-end test scenarios for key user workflows (e.g., using Playwright or Cypress).
+- **[~] Code Refactoring**:
     - **[x]** Created `useAppSettings` hook to centralize `localStorage` management for application settings.
-    - **[ ]** Conduct ongoing code refactoring: remove duplicate code, ensure components are well-defined and reusable, improve readability and maintainability.
-- **[ ] Dependency Management**:
+    - **[ ]** Conduct ongoing code refactoring: remove duplicate code, ensure components are well-defined and reusable, improve readability and maintainability. (General ongoing task)
+- **[ ] Dependency Management**: (Cannot be performed by AI)
     - Regularly check and update library versions in `package.json`, addressing any breaking changes.
 
 ### Deployment & Operations
 
 - **[x] Detail `apphosting.yaml` Configuration**:
     - **[x] Added common resource settings (CPU, memory, minInstances) and comments.**
-    - **[ ]** Review and optimize resource settings for production, especially considering the auto-monitoring agent.
+    - **[ ]** Review and optimize resource settings for production, especially considering the auto-monitoring agent. (Future optimization)
 - **[x] Environment Variable Management Strategy**:
     - **[x] Clarification**: Sensitive API keys managed via environment variables. Non-sensitive user preferences use `localStorage` (managed by `useAppSettings` hook).
-- **[x] Logging and Monitoring Strategy**:
-    - **[x] Enhanced basic server-side console logging in key actions and AI flows.**
-    - **[ ]** Enhance server-side logging for server actions and AI flow executions.
-    - **[ ]** Set up alerts in Cloud Monitoring for error rates or performance degradation.
+- **[~] Logging and Monitoring Strategy**:
+    - **[~] Enhanced basic server-side console logging in key actions and AI flows.** (Further improvements made in this pass)
+    - **[ ]** Set up alerts in Cloud Monitoring for error rates or performance degradation. (External service configuration)
 
-## ✅ Completed Major Tasks
-
+## ✅ Completed Major Tasks (Consolidated - for reference, primary list above is master)
 - Initial UI setup for dashboard and settings.
 - Basic AI integration for strategy formulation and content summarization using Genkit.
 - Implemented client-side storage for discovered content and (non-sensitive) settings using `localStorage`.
 - Addressed several Next.js runtime, syntax, and hydration errors.
 - Refined UI components and layout.
 - Translated development log TODOs to English.
-- Initial thoughts on LINE integration and Monitoring Agent status visualization.
-- **Implemented Genkit Tool (`fetchWebsiteContentTool`) for fetching raw web content and integrated it into the `generateContentSummary` flow.**
-- **Implemented basic detailed loading state indication for content processing by leveraging AI flow's progress output.**
-- **Refined `generateContentSummary` prompt for better handling of HTML extraction and progress reporting, added initial Gemini safety settings, and added few-shot examples.**
-- **Refactored Settings page to manage only non-sensitive user preferences in `localStorage`; sensitive API keys are now expected as server-side environment variables. Created `useAppSettings` hook to manage this client-side storage.**
-- **Implemented core logic for `sendToLineAction` to make API calls to LINE with a basic Flex Message. Client-side updated to pass `lineUserId`. Server-side error parsing from LINE API enhanced.**
-- **Refined `formulateSearchStrategy` prompt to ensure output JSON field names match the Zod schema and added few-shot examples. Integrated `react-hook-form` for client-side validation in Strategy Section.**
-- **Enhanced error handling in `processDiscoveredContent` for catastrophic AI flow failures.**
-- **Implemented placeholder functionality for "Publish to GitHub" including UI button, server action (which now generates Markdown), and status updates.**
-- **Cleaned up a redundant global font-family CSS rule.**
-- **Defined content-to-Markdown conversion logic within `publishToGithubAction`.**
-- **Implemented actual file creation/update in GitHub using Octokit within `publishToGithubAction`.**
-- **Added UI placeholder for simulated agent status in `DiscoveredContentSection`.**
-- **Enhanced `publishToGithubAction` to correctly handle updating existing files.**
-- **Improved loading state indication for action buttons in `ContentCard` with per-button spinners.**
-- **Updated `apphosting.yaml` with common resource settings and comments.**
-- **Enhanced basic server-side console logging in key actions and AI flows.**
-- **Implemented Image Generation feature: Genkit flow, server action, UI in `ContentCard` for generating and displaying images, including loading/error states.**
-- **Applied client-side validation using `react-hook-form` to the Settings page.**
-- **Introduced a React ErrorBoundary component and applied it to `DiscoveredContentSection` and `StrategySection` on the dashboard page.**
-- **Consolidated `@layer base` directives in `globals.css`.**
-- **Applied A11y improvements: `aria-live` for dynamic content in `ContentCard`, `aria-hidden` for decorative `Logo` in `SiteHeader`.**
+- Implemented Genkit Tool (`fetchWebsiteContentTool`) for fetching raw web content and integrated it into the `generateContentSummary` flow.
+- Implemented detailed loading state indication for content processing and other card actions.
+- Refined `generateContentSummary` prompt with progress reporting, safety settings, and few-shot examples.
+- Refactored Settings page to manage non-sensitive preferences in `localStorage` via `useAppSettings` hook; sensitive keys are server-side env vars.
+- Implemented core logic for `sendToLineAction` with basic Flex Message.
+- Refined `formulateSearchStrategy` prompt with few-shot examples; integrated `react-hook-form` for client-side validation in Strategy Section.
+- Enhanced error handling for catastrophic AI flow failures in `processDiscoveredContent`.
+- Implemented "Publish to GitHub" feature with Markdown generation and actual Git operations (create/update) via Octokit.
+- Cleaned up CSS and added placeholder for simulated agent status.
+- Updated `apphosting.yaml` with common resource settings.
+- Implemented Image Generation feature (Genkit flow, server action, UI for generation/display, loading/error states).
+- Applied client-side validation to the Settings page using `react-hook-form`.
+- Introduced React ErrorBoundary component and applied it to key dashboard sections.
+- Consolidated `@layer base` directives in `globals.css`.
+- Applied A11y improvements (aria-live, aria-hidden).
+- Enhanced server-side logging in key actions and AI flows.
 
 ---
 
