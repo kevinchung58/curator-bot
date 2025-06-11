@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useActionState } from 'react';
+import { useActionState, useTransition } from 'react';
 import { useFormStatus } from 'react-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -12,7 +12,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Textarea } from '@/components/ui/textarea';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { submitStrategyForm, type StrategyFormState } from '@/lib/actions';
-import { StrategyFormSchema } from '@/lib/definitions'; // Import from definitions
+import { StrategyFormSchema } from '@/lib/definitions'; 
 import { Lightbulb, Loader2, ListChecks, Share2, Newspaper } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -35,6 +35,7 @@ function SubmitButton() {
 
 export function StrategySection() {
   const [state, formAction] = useActionState(submitStrategyForm, initialState);
+  const [isPending, startTransition] = useTransition();
 
   const form = useForm<z.infer<typeof StrategyFormSchema>>({
     resolver: zodResolver(StrategyFormSchema),
@@ -46,7 +47,9 @@ export function StrategySection() {
   function onValidSubmit(data: z.infer<typeof StrategyFormSchema>) {
     const formData = new FormData();
     formData.append('curriculum', data.curriculum);
-    formAction(formData);
+    startTransition(() => {
+      formAction(formData);
+    });
   }
 
   return (
