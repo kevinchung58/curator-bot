@@ -29,8 +29,9 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-          # GOOGLE_API_KEY is available to Genkit if the agent calls a Next.js API route.
-          # If the agent script were to directly use Genkit with Google AI, it would need GOOGLE_API_KEY here.
-          # For now, assuming AI processing happens via an API call to the Next.js app.
+          # GOOGLE_API_KEY is available if the agent script were to directly use Genkit with Google AI.
+          # However, the primary design is for the agent to call a Next.js API endpoint,
+          # which then uses Genkit (and GOOGLE_API_KEY would be configured in App Hosting for the Next.js app).
+          # GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }} # Uncomment if direct Genkit use in agent is needed
           NEXT_PUBLIC_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL }} # URL of the deployed Next.js app for API calls
-        run: npx tsx src/agent/agent-script.ts
+        run: npx tsx src/agent/agent-script.ts # Use tsx to run TypeScript directly
