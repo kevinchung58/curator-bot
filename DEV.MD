@@ -1,185 +1,106 @@
+好的，這份開發日誌非常詳細。我將其翻譯成中文，並按照您的要求，重新整理成「已完成的功能描述」和「待辦事項 (TODO)」兩大部分。
 
-# Development Log (Content Curator Bot)
+內容策展機器人 (Content Curator Bot) - 開發狀態摘要
 
-## 🚀 Key Feature Status
+這是一個旨在幫助使用者自動化內容策劃流程的工具。它能根據主題生成策略、抓取並處理網路內容、生成摘要與圖像，並能將結果發送到 LINE 或發布到 GitHub。
 
-- **[x] Strategy Formulation**: When a user inputs a curriculum/topic, the AI suggests relevant search keywords, target websites, and content types to monitor. (Basic implementation complete, prompt refined for schema adherence and few-shot examples added. Client-side validation added via `react-hook-form`.)
-- **[x] Content Discovery & Processing**: When a user adds a URL, the content is summarized, and tags are generated. (Basic implementation complete, uses local storage for discovered items, processing via AI flow, now with a Genkit tool for web fetching, basic progress display, and refined AI prompt for summarization with safety settings and few-shot examples.)
-- **[x] Image Generation**: For processed content, users can trigger AI-powered image generation to create illustrative visuals. (Genkit flow, server action, and UI integration complete. Displays image, loading, and error states.)
-- **[x] Settings**: Non-sensitive user preferences (default topic, LINE User ID, GitHub Repo URL) can be configured and are saved to `localStorage` via a custom hook `useAppSettings`. Sensitive API keys (Google AI, LINE, GitHub PAT) are managed via server-side environment variables. (UI updated, `saveSettings` action refined, `useAppSettings` hook implemented and integrated. Client-side validation added.)
-- **[x] Send to LINE**: Button exists. Core logic to make API call to LINE with a Flex Message implemented in server action. Client-side logic to retrieve and pass `lineUserId` also implemented. Actual sending depends on valid server-side `LINE_CHANNEL_ACCESS_TOKEN` and client-side `lineUserId` configuration. Server-side error parsing from LINE API enhanced.
-- **[x] Publish to GitHub**: Button exists for processed content. Calls a server action that now generates Markdown for the content and creates/updates files in the specified GitHub repository using Octokit. Client-side logic retrieves `githubRepoUrl` and handles success/failure toasts. `GITHUB_PAT` environment variable is required.
+✅ 已完成功能與描述 (Features & Descriptions)
 
-## 📝 TODO List (English)
+策略擬定 (Strategy Formulation)
 
-### Core Feature Improvements & Backend Implementation
+功能: 使用者輸入一個課程或主題後，AI 會自動建議相關的搜尋關鍵字、目標網站和要監控的內容類型。
 
-- **[x] Implement Actual Settings Storage & Management**:
-    - **[x] Server-Side Storage for Sensitive Keys**:
-        - **[x] Clarification**: Sensitive API keys (Google AI, LINE Channel Access Token, GitHub PAT) are to be managed via server-side environment variables.
-        - **[ ]** (Future) Consider Google Secret Manager.
-    - **[x] Client-Side Storage for Non-Sensitive Preferences (localStorage via Hook)**:
-        - **[x]** `useAppSettings` hook manages `defaultTopic`, `githubRepoUrl`, `lineUserId`.
-        - **[ ]** (Future) If user auth added, migrate to persistent DB.
-    - **[x] Update `saveSettings` Server Action**:
-        - **[x]** Action handles non-sensitive preferences, returns to client; hook saves to `localStorage`.
-        - **[ ]** (Future) If DB used, modify action to write to DB.
+實作: AI 提示詞已優化，並包含範例以確保輸出格式穩定。前端使用 react-hook-form 進行即時輸入驗證。
 
-- **[x] Implement Actual LINE Bot Integration**:
-    - **[x] Implement `sendToLineAction` Logic**:
-        - **[x]** Uses `fetch` for LINE Messaging API, retrieves `LINE_CHANNEL_ACCESS_TOKEN` (server env) and `lineUserId` (client).
-    - **[x] Design Rich Message Format**:
-        - **[x]** Basic LINE Flex Message constructed.
-    - **[x] Robust Error Handling**:
-        - **[x]** Basic client/server error handling implemented.
-        - **[x]** Enhanced server-side error parsing from LINE API.
+內容探索與處理 (Content Discovery & Processing)
 
-- **[ ] Develop Content Auto-Monitoring Agent (Backend Process)**:
-    - **[ ] Choose Agent Architecture**:
-        - Option 1: Serverless function (e.g., Cloud Function for Firebase) triggered by a scheduler (e.g., Cloud Scheduler).
-        - Option 2: A continuously running process or scheduled job within the App Hosting backend (depending on service capabilities).
-    - **[ ] Implement Web Content Fetching & Parsing**:
-        - Fetch content from target websites identified in the search strategy.
-        - Use libraries like `node-fetch` (or `axios`) and HTML parsers (`jsdom` with `Readability.js` or `cheerio`) to extract clean article text.
-        - Ensure compliance with `robots.txt`.
-        - Handle potential errors during fetching/parsing gracefully.
-    - **[ ] Integrate with Search Strategy**:
-        - The agent must access the user-defined (or AI-generated) search keywords and target websites from their storage location (database/config).
-    - **[ ] Prevent Duplicate Processing**:
-        - Implement a mechanism (e.g., storing processed URLs in a database) to avoid re-processing the same content.
-    - **[ ] Trigger AI Summarization**:
-        - Once new content is discovered and fetched, the agent should invoke the `generateContentSummary` Genkit flow.
-    - **[ ] Persistent Storage for Discovered Content**:
-        - Save newly discovered and processed content items to a database (e.g., Firestore) so they can be displayed in the UI's "Discovered Content Section". This replaces the current `localStorage` approach for items found by the agent.
-    - **[~] Add Visual Status Indicator for Agent Health**:
-        - **[x] UI placeholder added to display simulated agent status in `DiscoveredContentSection`.**
-        - **[ ]** Implement a way for the agent to report its operational status (e.g., running, error, stopped).
-        - **[ ]** Display this status in the UI by querying the agent's status from its storage location or a health endpoint. 
+功能: 使用者貼上一個網址後，系統會抓取網頁內容、生成摘要和關鍵字標籤。
 
-- **[x] Detail & Implement GitHub Integration Feature**:
-    - **[x] Define Content-to-Markdown Conversion**:
-        - **[x] Specified how curated content (title, summary, tags, source URL) will be formatted into Markdown (including frontmatter) in `publishToGithubAction`.**
-    - **[x] Secure GitHub PAT Usage**:
-        - **[x]** Retrieve and use the GitHub Personal Access Token from a secure server-side environment variable (`GITHUB_PAT`).
-    - **[x] Implement Git Operations**:
-        - **[x] `publishToGithubAction` now uses `@octokit/rest` to create/update files (handling both new and existing files) in the specified GitHub repository.**
-        - **[x] Error handling for GitHub API calls implemented and refined.**
-        - **[x]** NOTE: Assumes a base directory like `curated-content/` exists in the repo or user creates it.
-    - **[x] Define File/Repository Structure**:
-        - **[x]** Decision: Files will be organized under a `curated-content/` directory.
-        - **[x]** Filename: `YYYY-MM-DD-slugified-title-shortId.md`.
-    - **[x] Create Server Action for Publishing**:
-        - **[x]** A server action (`publishToGithubAction`) has been created and significantly enhanced with actual Git operations via Octokit.
-    - **[x] UI Feedback for Publish Operation**:
-        - **[x]** "Publish to GitHub" button added to `ContentCard` for processed items.
-        - **[x]** Toasts for success (including 'View file' link if available) /failure of the publish operation implemented in `DiscoveredContentSection`.
-        - **[x]** New status 'publishedToGithub' added to `ProcessedContent` and UI reflects this.
+實作: 使用 Genkit 工具（fetchWebsiteContentTool）來抓取網頁。AI 流程（generateContentSummary）負責處理內容，並設有安全設定和範例以提高摘要品質。處理進度會顯示在介面上，處理完的項目暫時儲存在瀏覽器的 localStorage 中。
 
-- **[ ] Content Versioning or History (Optional but useful later)**:
-    - Consider a simple system to track when content was processed, sent to LINE, or published to GitHub.
+AI 圖像生成 (Image Generation)
 
-- **[ ] User Authentication System (Optional - if multi-user or personalized server-side settings are needed)**:
-    - If the app needs to support multiple users or store personalized settings securely on the server beyond a single `.env` configuration.
+功能: 對於已處理過的內容，使用者可以點擊按鈕，觸發 AI 根據標題和摘要生成一張說明性的配圖。
 
-### AI and Genkit Flow Enhancements
+實作: 已完成後端 Genkit 流程、伺服器動作 (Server Action) 與前端 UI 的整合，能正確顯示生成中、成功（顯示圖片）和錯誤的狀態。
 
-- **[x] Enhance AI Prompts & Output Consistency (for `generateContentSummary` flow)**:
-    - **[x]** Continuously test and refine prompts for `generateContentSummary` to improve result quality and consistency. (Refined, includes progress messaging)
-    - **[x]** Consider adding few-shot examples to prompts for `generateContentSummary`. (Added examples for success and extraction failure)
-    - **[x]** Review and adjust Gemini safety settings in `generateContentSummary` Genkit flow. (Initial settings added)
-- **[x] Refine prompt for `formulateSearchStrategy`**:
-    - **[x]** Ensured example JSON in prompt matches Zod schema field names.
-    - **[x]** Added few-shot examples for `formulateSearchStrategy`.
-- **[x] Implement Genkit Tool for Web Content Fetching**:
-    - **[x]** Create a new Genkit `Tool` (`fetchWebsiteContentTool`).
-    - **[x]** This tool accepts a URL, fetches its raw HTML content.
-    - **[x]** Modify the `generateContentSummary` flow to use this tool.
-- **[x] Image Generation/Processing Feature**:
-    - **[x]** Created Genkit flow (`generateIllustrativeImageFlow`) using `googleai/gemini-2.0-flash-exp` to generate images based on summaries and titles.
-    - **[x]** Implemented server action (`generateImageForContentAction`) to call the flow.
-    - **[x]** Added UI elements in `ContentCard` to trigger image generation, display the image (using `next/image`), or show loading/error states.
-    - **[x]** Ensured `next/image` component is used with `data-ai-hint` for generated images.
+系統設定 (Settings)
 
-### UI/UX Improvements
+功能: 使用者可以設定非敏感的個人偏好，如預設主題、LINE User ID 和 GitHub 儲存庫網址。敏感的 API 金鑰則由伺服器端管理。
 
-- **[x] Detailed Loading State Indication**:
-    - **[x]** For AI flows and other long-running actions (content processing), provide more granular progress feedback. (Basic implementation for content processing done, leveraging AI flow's progress field and refined server action logic).
-    - **[x]** Extend to strategy formulation (reviewed and deemed sufficient with current spinner).
-    - **[x]** Extend to publishing actions and other card actions (Process, Send to LINE, Publish to GitHub, Generate Image buttons in `ContentCard` now have specific loading spinners).
-- **[x] Strengthen User Feedback and Notifications**:
-    - **[x]** Continue consistent and informative use of `useToast` for all user actions.
-- **[x] Improve Input Validation Messages**:
-    - **[x]** Make Zod validation error messages more user-friendly in forms (Strategy Section done via `FormMessage`).
-    - **[x]** Add client-side validation for quicker feedback, in addition to server-side validation (Strategy Section done).
-    - **[x]** Apply client-side validation to Settings page.
-- **[~] Review Responsive Design and Accessibility (A11y)**:
-    - **[ ]** Regularly check layouts on various screen sizes. (Manual testing required)
-    - **[~]** Ensure proper ARIA attributes and semantic HTML for web accessibility. (Specific improvements made, ongoing concern)
-        - **[x]** Added `aria-live` for dynamic content updates in `ContentCard` (processing, image generating, sent/published messages).
-        - **[x]** Marked decorative `Logo` in `SiteHeader` as `aria-hidden`.
-        - **[x]** Verified `Alert` components provide `role="alert"` for error messages.
-        - **[x]** Verified form components (`react-hook-form` + ShadCN) manage ARIA attributes for inputs.
-- **[x] CSS Cleanup**: 
-    - **[x]** Removed redundant global font-family CSS rule.
-    - **[x]** Consolidated `@layer base` directives in `globals.css`.
+實作: 非敏感設定透過自訂的 useAppSettings Hook 儲存於 localStorage。敏感金鑰（Google AI、LINE、GitHub PAT）則從伺服器端的環境變數讀取。設定頁面已加上前端驗證。
 
-### Technical Debt & Code Quality
+發送到 LINE (Send to LINE)
 
-- **[~] Overall Error Handling Enhancement**:
-    - Implement comprehensive error handling across:
-        - **[x] Client components (React Error Boundaries for sections).** (Applied to DiscoveredContentSection and StrategySection on dashboard page)
-        - **[x]** Server Actions (return clear error states, especially for catastrophic AI flow failures - improved for `generateContentSummary`, `sendToLineAction`, `generateImageForContentAction` with further refinement for AI system errors in `processDiscoveredContent`).
-        - **[x]** AI Flows (graceful failure and error reporting - improved for `generateContentSummary`, `generateIllustrativeImageFlow`).
-        - **[ ]** Future Monitoring Agent (robust logging and error recovery). (Depends on agent implementation)
-- **[ ] Write Test Code**: (Significant effort, out of scope for current pass)
-    - **[ ]** Unit Tests: For utility functions, key component logic, Zod schemas (e.g., using Jest/Vitest, React Testing Library).
-    - **[ ]** Integration Tests: For server actions interacting with AI flows and database operations.
-    - **[ ]** E2E Tests (Future): Define and automate end-to-end test scenarios for key user workflows (e.g., using Playwright or Cypress).
-- **[~] Code Refactoring**:
-    - **[x]** Created `useAppSettings` hook to centralize `localStorage` management for application settings.
-    - **[ ]** Conduct ongoing code refactoring: remove duplicate code, ensure components are well-defined and reusable, improve readability and maintainability. (General ongoing task)
-- **[ ] Dependency Management**: (Cannot be performed by AI)
-    - Regularly check and update library versions in `package.json`, addressing any breaking changes.
+功能: 內容卡片上有一個按鈕，點擊後會將該內容以 LINE Flex Message 的格式發送給指定的 LINE 使用者。
 
-### Deployment & Operations
+實作: 後端已完成呼叫 LINE Messaging API 的核心邏輯。能否成功發送取決於伺服器端 LINE_CHANNEL_ACCESS_TOKEN 環境變數和使用者在設定中填寫的 lineUserId 是否有效。已加強對 LINE API 回傳錯誤的解析。
 
-- **[x] Detail `apphosting.yaml` Configuration**:
-    - **[x] Added common resource settings (CPU, memory, minInstances) and comments.**
-    - **[ ]** Review and optimize resource settings for production, especially considering the auto-monitoring agent. (Future optimization)
-- **[x] Environment Variable Management Strategy**:
-    - **[x] Clarification**: Sensitive API keys managed via environment variables. Non-sensitive user preferences use `localStorage` (managed by `useAppSettings` hook).
-- **[~] Logging and Monitoring Strategy**:
-    - **[~] Enhanced basic server-side console logging in key actions and AI flows.** (Further improvements made in this pass)
-    - **[ ]** Set up alerts in Cloud Monitoring for error rates or performance degradation. (External service configuration)
+發布到 GitHub (Publish to GitHub)
 
-## ✅ Completed Major Tasks (Consolidated - for reference, primary list above is master)
-- Initial UI setup for dashboard and settings.
-- Basic AI integration for strategy formulation and content summarization using Genkit.
-- Implemented client-side storage for discovered content and (non-sensitive) settings using `localStorage`.
-- Addressed several Next.js runtime, syntax, and hydration errors.
-- Refined UI components and layout.
-- Translated development log TODOs to English.
-- Implemented Genkit Tool (`fetchWebsiteContentTool`) for fetching raw web content and integrated it into the `generateContentSummary` flow.
-- Implemented detailed loading state indication for content processing and other card actions.
-- Refined `generateContentSummary` prompt with progress reporting, safety settings, and few-shot examples.
-- Refactored Settings page to manage non-sensitive preferences in `localStorage` via `useAppSettings` hook; sensitive keys are server-side env vars.
-- Implemented core logic for `sendToLineAction` with basic Flex Message.
-- Refined `formulateSearchStrategy` prompt with few-shot examples; integrated `react-hook-form` for client-side validation in Strategy Section.
-- Enhanced error handling for catastrophic AI flow failures in `processDiscoveredContent`.
-- Implemented "Publish to GitHub" feature with Markdown generation and actual Git operations (create/update) via Octokit.
-- Cleaned up CSS and added placeholder for simulated agent status.
-- Updated `apphosting.yaml` with common resource settings.
-- Implemented Image Generation feature (Genkit flow, server action, UI for generation/display, loading/error states).
-- Applied client-side validation to the Settings page using `react-hook-form`.
-- Introduced React ErrorBoundary component and applied it to key dashboard sections.
-- Consolidated `@layer base` directives in `globals.css`.
-- Applied A11y improvements (aria-live, aria-hidden).
-- Enhanced server-side logging in key actions and AI flows.
+功能: 使用者可以將處理好的內容以 Markdown 格式發布到指定的 GitHub 儲存庫。
 
----
+實作: 後端使用 Octokit 套件來建立或更新（如果檔案已存在）GitHub 上的 .md 檔案。檔名格式為 YYYY-MM-DD-標題-簡短ID.md。此功能需要伺服器端設定 GITHUB_PAT 環境變數。前端會顯示成功或失敗的提示訊息。
 
-This expanded list should provide a more detailed roadmap. Remember, building all of this takes time and iterative development!
-Let me know which areas you'd like to focus on next.
+📝 待辦事項 (TODO List)
+核心功能與後端
 
+[ ] 開發內容自動監控代理 (Agent)
 
-    
+目標: 建立一個後端自動化程序，定期根據使用者設定的策略去網路上尋找新內容並自動處理。
+
+[ ] 選擇代理架構（例如：使用 Cloud Function + Cloud Scheduler 的無伺服器架構）。
+
+[ ] 實作網頁內容爬取與解析，並確保遵循 robots.txt 規範。
+
+[ ] 整合使用者定義的搜尋策略（關鍵字、目標網站）。
+
+[ ] 建立機制（例如：使用資料庫）來儲存已處理的網址，以防止重複處理。
+
+[ ] 當發現新內容時，自動觸發現有的 AI 摘要流程。
+
+[ ] 將 Agent 發現並處理完的內容儲存到一個永久性資料庫（如 Firestore），以取代目前用於 Agent 的 localStorage 方案。
+
+[ ] 實作後端回報 Agent 運行狀態的機制，並在前端 UI 上顯示（例如：運行中、錯誤、已停止）。
+
+[ ] 內容版本控制或歷史紀錄 (可選，未來功能)
+
+考慮建立一個簡單的系統來追蹤內容在何時被處理、發送到 LINE 或發布到 GitHub。
+
+[ ] 使用者身份驗證系統 (可選，未來功能)
+
+如果應用需要支援多使用者，或需要在伺服器端安全地儲存個人化設定時，則需要導入此功能。
+
+技術債與程式碼品質
+
+[ ] 撰寫測試程式碼
+
+目標: 為關鍵功能撰寫單元測試 (Unit Tests) 與整合測試 (Integration Tests)，以確保程式碼的穩定性。
+
+[ ] 全面性的錯誤處理強化
+
+目標: 為未來的「自動監控代理」建立健全的日誌記錄和錯誤恢復機制。
+
+[ ] 持續進行程式碼重構
+
+目標: 持續優化程式碼結構，移除重複程式碼，提高可讀性與可維護性。
+
+UI/UX 優化
+
+[ ] 響應式設計與無障礙 (A11y) 的持續檢視
+
+目標: 定期在不同尺寸的螢幕上檢查版面，並持續確保符合無障礙網頁設計規範。
+
+部署與營運
+
+[ ] 優化部署資源配置
+
+目標: 根據未來「自動監控代理」的資源消耗，審查並優化 apphosting.yaml 中的 CPU、記憶體等設定。
+
+[ ] 建立日誌與監控警報
+
+目標: 在雲端平台（如 Cloud Monitoring）設定警報，以便在錯誤率或效能下降時能即時收到通知。
+
+[ ] 依賴管理
+
+目標: 定期檢查並更新 package.json 中的套件版本。
