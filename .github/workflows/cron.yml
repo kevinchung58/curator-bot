@@ -1,0 +1,36 @@
+
+name: Content Curator Agent
+
+on:
+  schedule:
+    # Runs every hour at the start of the hour
+    - cron: '0 * * * *'
+  workflow_dispatch: # Allows manual triggering from the GitHub UI
+
+jobs:
+  run-agent:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15 # Set a timeout for the job
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18' # Specify Node.js version
+          cache: 'npm' # Cache npm dependencies
+
+      - name: Install dependencies
+        run: npm ci # Use ci for cleaner installs in CI
+
+      - name: Run the agent script
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          # GOOGLE_API_KEY is available to Genkit if the agent calls a Next.js API route.
+          # If the agent script were to directly use Genkit with Google AI, it would need GOOGLE_API_KEY here.
+          # For now, assuming AI processing happens via an API call to the Next.js app.
+          NEXT_PUBLIC_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL }} # URL of the deployed Next.js app for API calls
+        run: npx tsx src/agent/agent-script.ts
