@@ -72,7 +72,7 @@
         - **[x]** A server action (`publishToGithubAction`) has been created and significantly enhanced with actual Git operations via Octokit.
     - **[x] UI Feedback for Publish Operation**:
         - **[x]** "Publish to GitHub" button added to `ContentCard` for processed items.
-        - **[x]** Toasts for success/failure of the publish operation implemented in `DiscoveredContentSection`.
+        - **[x]** Toasts for success (including 'View file' link if available) /failure of the publish operation implemented in `DiscoveredContentSection`.
         - **[x]** New status 'publishedToGithub' added to `ProcessedContent` and UI reflects this.
 
 - **[ ] Content Versioning or History (Optional but useful later)**:
@@ -181,3 +181,5 @@
 This expanded list should provide a more detailed roadmap. Remember, building all of this takes time and iterative development!
 Let me know which areas you'd like to focus on next.
 
+
+    
