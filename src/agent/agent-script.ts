@@ -100,7 +100,11 @@ async function fetchWebContent(url: string): Promise<string | null> {
   console.log(`Fetching web content from: ${url}`);
   try {
     // Using global fetch, available in Node.js 18+ (which GH Actions runner uses)
-    const response = await fetch(url, { headers: { 'User-Agent': 'ContentCuratorBot/1.0 (+http://yourprojecturl.com/botinfo)' } });
+    const response = await fetch(url, { 
+      headers: { 
+        'User-Agent': 'ContentCuratorBot/1.0 (+http://yourprojecturl.com/botinfo)' 
+      } 
+    });
     if (!response.ok) {
       console.error(`Failed to fetch ${url}: ${response.status} ${response.statusText}`);
       return null;
@@ -264,8 +268,8 @@ async function storeResultsInSupabase(supabaseClient: SupabaseClient, processedD
           source_url: processedData.sourceUrl, // Ensure this column has a UNIQUE constraint
           status: processedData.status,
           // created_at: new Date().toISOString(), // Supabase typically handles 'created_at' with default now()
-          // agent_progress_message: processedData.progressMessage, // Optional: if you have such a column
-          agent_error_message: processedData.errorMessage, // Optional
+          agent_progress_message: processedData.progressMessage, 
+          agent_error_message: processedData.errorMessage, 
           // image_url: processedData.imageUrl, // Optional, if storing image URL (not data URI)
           // image_ai_hint: processedData.imageAiHint, // Optional
           // image_status: processedData.imageStatus, // Optional
