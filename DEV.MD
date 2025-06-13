@@ -113,7 +113,7 @@ AI 圖像生成 (Image Generation)
 
 [~] **全面性的錯誤處理強化 (尤其針對 Agent)**
     目標: 為未來的「自動監控代理」建立健全的日誌記錄和錯誤恢復機制。
-    [x] 1. (Agent) 設計並實作針對網路請求、API 呼叫失敗的錯誤重試機制。 (已在 `fetchWebContent` 中實現)；API 呼叫的重試機制待評估。
+    [x] 1. (Agent) 設計並實作針對網路請求、API 呼叫失敗的錯誤重試機制。 (已在 `fetchWebContent` 及 `triggerAIProcessing` 中實現)。
     [x] 2. (Agent) 實作更詳細、結構化的錯誤日誌記錄到 Supabase 或 GitHub Actions Logs。(GitHub Actions workflow 已設定，Agent 腳本包含 console.log，Supabase現可儲存詳細錯誤訊息，可進一步增強)
     [x] 3. (Agent) 設定當發生嚴重錯誤或 Agent 執行失敗時的通知機制 (已透過 Nodemailer 實現郵件通知，若環境變數配置齊全)。
 

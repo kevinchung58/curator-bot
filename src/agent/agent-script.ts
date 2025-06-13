@@ -37,6 +37,12 @@ const MAX_FETCH_RETRIES = 3;
 const FETCH_RETRY_DELAY_MS = 1000;
 const FETCH_TIMEOUT_MS = 15000; // 15 seconds timeout for each fetch attempt
 
+// Configuration for API call retries (for triggerAIProcessing)
+const MAX_API_CALL_RETRIES = 3;
+const API_CALL_RETRY_DELAY_MS = 2000;
+const API_CALL_TIMEOUT_MS = 20000; // Timeout for each API call attempt
+
+
 // Statuses for curated_content table
 const STATUS = {
   PROCESSING_STARTED: 'processing_started', // Agent has picked up the URL
@@ -467,87 +473,107 @@ async function triggerAIProcessing(articleId: string, articleUrl: string, topic:
   const appUrl = process.env.NEXT_PUBLIC_APP_URL; // URL of the deployed Next.js app
 
   if (!appUrl) {
-    console.error('NEXT_PUBLIC_APP_URL is not set. Cannot call AI processing API.');
-    // Return an error-like ProcessedContent structure
+    const errorMsg = 'NEXT_PUBLIC_APP_URL is not set. Cannot call AI processing API.';
+    console.error(errorMsg);
     return {
-        id: articleId,
-        sourceUrl: articleUrl,
-        title: 'Agent Misconfiguration',
-        summary: 'NEXT_PUBLIC_APP_URL not configured in agent environment. AI processing API endpoint could not be called.',
-        tags: ['error', 'agent-config-error'],
-        status: 'error',
+        id: articleId, sourceUrl: articleUrl, title: 'Agent Misconfiguration',
+        summary: 'NEXT_PUBLIC_APP_URL not configured in agent environment.',
+        tags: ['error', 'agent-config-error'], status: STATUS.ERROR, // Use STATUS constant
         progressMessage: 'AI processing skipped due to missing NEXT_PUBLIC_APP_URL.',
-        errorMessage: 'NEXT_PUBLIC_APP_URL not configured for agent API calls.',
-        imageStatus: 'none',
+        errorMessage: errorMsg, imageStatus: 'none',
     };
   }
 
   const apiEndpoint = `${appUrl.replace(/\/$/, '')}/api/agent/process-content`;
   const requestBody: AgentProcessApiRequest = { articleId, articleUrl, topic };
+  let lastError: any = null;
 
-  console.log(`Calling Next.js API endpoint: POST ${apiEndpoint}`);
-  try {
-    const response = await fetch(apiEndpoint, {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        // TODO: Consider adding a secret API key for this agent-only endpoint
-        // 'X-Agent-Api-Key': process.env.AGENT_API_KEY || '' 
-      },
-      body: JSON.stringify(requestBody),
-    });
+  for (let attempt = 0; attempt < MAX_API_CALL_RETRIES; attempt++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), API_CALL_TIMEOUT_MS);
 
-    if (!response.ok) {
-      let errorDataText = 'No error details from API.';
-      try {
-        errorDataText = await response.text();
-      } catch (e) {}
-      console.error(`AI Processing API error: ${response.status} ${response.statusText}. Response: ${errorDataText.substring(0, 500)}`);
-      return {
-        id: articleId,
-        sourceUrl: articleUrl,
-        title: 'API Processing Error',
-        summary: `Failed to process content via API. Status: ${response.status}. Details: ${errorDataText.substring(0,200)}`,
-        tags: ['error', 'api-error'],
-        status: 'error',
-        errorMessage: `API returned ${response.status}: ${errorDataText.substring(0,200)}`,
-        progressMessage: `Error calling AI processing API: ${response.status}`,
-        imageStatus: 'none',
-      };
+    console.log(`Attempt ${attempt + 1}/${MAX_API_CALL_RETRIES} to call AI Processing API: POST ${apiEndpoint}`);
+    try {
+      const response = await fetch(apiEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      if (response.ok) {
+        const result: AgentProcessApiResponse = await response.json();
+        if (result.error || !result.processedContent) {
+          // Application-level error from the API (e.g., AI model failed, validation error)
+          // These are typically not retryable in the same way as network errors.
+          const apiErrorMsg = result.error || result.message || 'AI Processing API returned success status but error in content or no content.';
+          console.error(`AI Processing API returned an application error: ${apiErrorMsg}`);
+          return {
+              id: articleId, sourceUrl: articleUrl, title: 'AI Processing Failed by API',
+              summary: apiErrorMsg, tags: ['error', 'ai-failure-via-api'], status: STATUS.AI_PROCESSING_FAILED,
+              errorMessage: apiErrorMsg, progressMessage: 'AI processing failed at API level.', imageStatus: 'none',
+          };
+        }
+        console.log('AI processing successful via API for:', result.processedContent?.title);
+        return result.processedContent;
+      } else {
+        // HTTP error (e.g., 500, 503, 400, 401)
+        let errorDataText = `HTTP ${response.status}: ${response.statusText}`;
+        try { errorDataText = (await response.text()).substring(0, 500); } catch (e) {}
+
+        lastError = new Error(`API call failed with status ${response.status}: ${response.statusText}. Response: ${errorDataText}`);
+        console.error(`Attempt ${attempt + 1} failed: ${lastError.message}`);
+
+        // Retry only for specific server-side HTTP errors
+        if (response.status === 500 || response.status === 502 || response.status === 503 || response.status === 504) {
+          if (attempt < MAX_API_CALL_RETRIES - 1) {
+            console.log(`Retrying after ${API_CALL_RETRY_DELAY_MS}ms...`);
+            await new Promise(resolve => setTimeout(resolve, API_CALL_RETRY_DELAY_MS));
+            continue; // Next attempt
+          }
+        } else {
+          // Non-retryable HTTP error (e.g., 4xx client errors)
+          console.error('Non-retryable HTTP error received from API. Not retrying.');
+          return {
+              id: articleId, sourceUrl: articleUrl, title: 'API Client Error',
+              summary: `API returned client error ${response.status}. Details: ${errorDataText}`,
+              tags: ['error', 'api-client-error'], status: STATUS.ERROR, // Or a more specific client error status
+              errorMessage: `API returned ${response.status}: ${errorDataText}`,
+              progressMessage: `Error calling AI processing API: ${response.status}`, imageStatus: 'none',
+          };
+        }
+      }
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      lastError = error; // Store the error for this attempt
+      if (error.name === 'AbortError') {
+        lastError = new Error(`API call timed out after ${API_CALL_TIMEOUT_MS}ms.`);
+      }
+      console.error(`Attempt ${attempt + 1} failed: ${lastError.message}`);
+      if (attempt < MAX_API_CALL_RETRIES - 1) {
+        console.log(`Retrying after ${API_CALL_RETRY_DELAY_MS}ms...`);
+        await new Promise(resolve => setTimeout(resolve, API_CALL_RETRY_DELAY_MS));
+        // continue; // Already at end of loop body, will continue naturally
+      }
     }
+  } // End of retry loop
 
-    const result: AgentProcessApiResponse = await response.json();
-    if (result.error || !result.processedContent) {
-        console.error('AI Processing API returned an error or no content:', result.error || 'No processedContent in response');
-        return {
-            id: articleId,
-            sourceUrl: articleUrl,
-            title: 'AI Processing Failed by API',
-            summary: result.error || result.message || 'The API reported a failure during AI processing.',
-            tags: ['error', 'ai-failure-via-api'],
-            status: 'error',
-            errorMessage: result.error || result.message || 'API reported AI failure.',
-            progressMessage: result.message || 'AI processing via API failed.',
-            imageStatus: 'none',
-        };
-    }
-    
-    console.log('AI processing successful via API for:', result.processedContent?.title);
-    return result.processedContent;
-  } catch (error: any) {
-    console.error('Error calling AI processing API:', error.message);
+  // If loop finished due to exhausting retries
+  const finalErrorMsg = `Failed to call AI processing API at ${apiEndpoint} after ${MAX_API_CALL_RETRIES} attempts. Last error: ${lastError?.message || 'Unknown error'}`;
+  console.error(finalErrorMsg);
     return {
         id: articleId,
         sourceUrl: articleUrl,
-        title: 'Network Error Calling API',
-        summary: `Could not connect to the AI processing API endpoint at ${apiEndpoint}. Error: ${error.message}`,
-        tags: ['error', 'network-error', 'agent-api-call-failed'],
-        status: 'error',
-        errorMessage: `Network error calling API: ${error.message}`,
-        progressMessage: 'Failed to connect to AI processing API.',
+        title: 'API Call Failed After Retries',
+        summary: finalErrorMsg,
+        tags: ['error', 'api-error', 'max-retries-exceeded'],
+        status: STATUS.AI_PROCESSING_FAILED, // Use specific status
+        errorMessage: finalErrorMsg,
+        progressMessage: `Failed AI processing after ${MAX_API_CALL_RETRIES} attempts.`,
         imageStatus: 'none',
     };
-  }
+}
 }
 
 /**

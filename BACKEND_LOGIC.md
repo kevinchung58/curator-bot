@@ -34,10 +34,14 @@ The agent's behavior is configured through environment variables and internal co
 
 ### Internal Constants
 
-*   **Fetch Retries & Timeouts:**
+*   **Fetch Retries & Timeouts (for external web content):**
     *   `MAX_FETCH_RETRIES`: Number of times to retry fetching content from a URL on failure (Default: 3).
     *   `FETCH_RETRY_DELAY_MS`: Delay in milliseconds between fetch retries (Default: 1000ms).
     *   `FETCH_TIMEOUT_MS`: Timeout for each fetch attempt (Default: 15000ms).
+*   **API Call Retries & Timeouts (for internal AI processing API):**
+    *   `MAX_API_CALL_RETRIES`: Number of times to retry the API call to the Next.js endpoint (Default: 3).
+    *   `API_CALL_RETRY_DELAY_MS`: Delay in milliseconds between API call retries (Default: 2000ms).
+    *   `API_CALL_TIMEOUT_MS`: Timeout for each individual API call attempt (Default: 20000ms).
 *   **User Agent:**
     *   `OUR_USER_AGENT`: The user agent string the agent uses for HTTP requests (e.g., `ContentCuratorBot/1.0 (+http://yourprojecturl.com/botinfo)`).
 *   **Link Discovery Configuration:**
@@ -135,7 +139,7 @@ This discovery mechanism allows the agent to expand its reach beyond the initial
 *   **`extractMainContent(htmlContent, url)`**: Uses `JSDOM` to parse HTML. It then uses `@mozilla/readability` to extract the main article content and calls `extractLinksFromHtml` to discover hyperlinks from the page. Returns an `ExtractedArticle` object (which includes `discoveredLinks`) or `null` on critical parsing errors. It attempts to return a minimal object with links even if full article extraction fails.
 *   **`fetchWebContent(targetUrl)`**: Fetches web content from a URL. Handles `robots.txt` checks, implements retry logic with timeouts for fetching the main content, and calls `extractMainContent`. Returns a `WebContentFetchResult` object containing raw HTML, the `ExtractedArticle` (with discovered links), and error/status flags.
 *   **`checkForDuplicates(client, sourceUrl)`**: Checks if a given `sourceUrl` already exists in the `curated_content` table to avoid reprocessing.
-*   **`triggerAIProcessing(articleId, articleUrl, topic)`**: Calls the external Next.js API endpoint (`/api/agent/process-content`) to perform AI-based processing on the content of the given URL. Receives `originalStrategyKeywords` as `topic`. Returns a `ProcessedContent` object or `null`.
+*   **`triggerAIProcessing(articleId, articleUrl, topic)`**: Calls the external Next.js API endpoint (`/api/agent/process-content`) to perform AI-based processing on the content of the given URL. Receives `originalStrategyKeywords` as `topic`. Returns a `ProcessedContent` object or `null`. It now implements a retry mechanism (similar to `fetchWebContent`) for the `fetch` call to the Next.js API endpoint. This includes retrying on network errors and specific server-side HTTP status codes (500, 502, 503, 504), using `MAX_API_CALL_RETRIES`, `API_CALL_RETRY_DELAY_MS`, and `API_CALL_TIMEOUT_MS`. Application-level errors returned by the API (e.g., AI model failure indicated in JSON response) or client-side HTTP errors (4xx) are not retried.
 *   **`updateSupabaseRecord(client, sourceUrl, updates)`**: Updates an existing record in the `curated_content` table for the given `sourceUrl` with new data (status, messages, AI results, etc.).
 *   **`sendNotification(subject, body, isCritical)`**: Sends notifications for critical errors or operational warnings. It attempts to send an email using `nodemailer` if email-related environment variables are configured. If not fully configured, or if email sending fails, it falls back to logging the notification to the console.
 *   **`runAgent()`**: The main orchestration function. Initializes the agent, fetches strategies, and manages a queue of URLs to process (including initially targeted sites and discovered links). It handles the lifecycle of each URL: duplicate checking, initial record creation (tagging discovered links), content fetching, link discovery, AI processing, and final record updates. It also includes a startup check for email notification configuration.
@@ -160,7 +164,7 @@ Each step in the `runAgent` workflow updates the status in the Supabase record, 
 
 ## 8. Error Handling & Notifications
 
-*   **Retry Logic:** `fetchWebContent` implements a retry mechanism with delays and timeouts for fetching the main content, making it resilient to transient network issues.
+*   **Retry Logic:** Both `fetchWebContent` (for external content) and `triggerAIProcessing` (for internal API calls) implement retry mechanisms with delays and timeouts, making them resilient to transient network issues and certain server-side errors.
 *   **Graceful Exits & Continuations:**
     *   Individual URL processing failures (e.g., fetch error, AI processing error) are logged to Supabase for that specific URL, and the agent continues with the next URL or strategy.
     *   Failure to insert an initial record for a URL (a critical local DB step) will cause the agent to skip that URL and continue.
