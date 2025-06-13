@@ -23,7 +23,14 @@ The agent's behavior is configured through environment variables and internal co
 *   `SUPABASE_URL`: The URL of your Supabase project.
 *   `SUPABASE_ANON_KEY`: The public anonymous key for your Supabase project.
 *   `NEXT_PUBLIC_APP_URL`: The base URL of the Next.js application where the AI processing API endpoint (`/api/agent/process-content`) is hosted.
-*   *(Conceptual for Notifications)*: `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USER`, `EMAIL_PASS`, `NOTIFICATION_EMAIL_FROM`, `NOTIFICATION_EMAIL_TO`, `SLACK_WEBHOOK_URL` (these would be needed if `sendNotification` is fully implemented).
+*   **Email Notifications:**
+    *   `EMAIL_HOST`: SMTP server host for sending email notifications.
+    *   `EMAIL_PORT`: SMTP server port (e.g., 587 for TLS, 465 for SSL).
+    *   `EMAIL_USER`: Username for SMTP authentication.
+    *   `EMAIL_PASS`: Password for SMTP authentication.
+    *   `EMAIL_SECURE`: Set to `'true'` if using SSL (typically port 465), otherwise `false` (for STARTTLS on port 587/25).
+    *   `NOTIFICATION_EMAIL_FROM`: The "From" address for notification emails (e.g., `agent@example.com`).
+    *   `NOTIFICATION_EMAIL_TO`: The recipient email address(es) for agent notifications.
 
 ### Internal Constants
 
@@ -130,8 +137,8 @@ This discovery mechanism allows the agent to expand its reach beyond the initial
 *   **`checkForDuplicates(client, sourceUrl)`**: Checks if a given `sourceUrl` already exists in the `curated_content` table to avoid reprocessing.
 *   **`triggerAIProcessing(articleId, articleUrl, topic)`**: Calls the external Next.js API endpoint (`/api/agent/process-content`) to perform AI-based processing on the content of the given URL. Receives `originalStrategyKeywords` as `topic`. Returns a `ProcessedContent` object or `null`.
 *   **`updateSupabaseRecord(client, sourceUrl, updates)`**: Updates an existing record in the `curated_content` table for the given `sourceUrl` with new data (status, messages, AI results, etc.).
-*   **`sendNotification(subject, body, isCritical)`**: A stub function for sending notifications (currently logs to console). Intended for critical errors or operational warnings.
-*   **`runAgent()`**: The main orchestration function. Initializes the agent, fetches strategies, and manages a queue of URLs to process (including initially targeted sites and discovered links). It handles the lifecycle of each URL: duplicate checking, initial record creation (tagging discovered links), content fetching, link discovery, AI processing, and final record updates.
+*   **`sendNotification(subject, body, isCritical)`**: Sends notifications for critical errors or operational warnings. It attempts to send an email using `nodemailer` if email-related environment variables are configured. If not fully configured, or if email sending fails, it falls back to logging the notification to the console.
+*   **`runAgent()`**: The main orchestration function. Initializes the agent, fetches strategies, and manages a queue of URLs to process (including initially targeted sites and discovered links). It handles the lifecycle of each URL: duplicate checking, initial record creation (tagging discovered links), content fetching, link discovery, AI processing, and final record updates. It also includes a startup check for email notification configuration.
 
 ## 7. Status Management
 
@@ -157,12 +164,15 @@ Each step in the `runAgent` workflow updates the status in the Supabase record, 
 *   **Graceful Exits & Continuations:**
     *   Individual URL processing failures (e.g., fetch error, AI processing error) are logged to Supabase for that specific URL, and the agent continues with the next URL or strategy.
     *   Failure to insert an initial record for a URL (a critical local DB step) will cause the agent to skip that URL and continue.
-*   **Critical Error Notifications:**
-    *   The `sendNotification` function (currently a logging stub) is called for:
+*   **Notifications:**
+    *   The `runAgent` function performs a startup check for essential email environment variables (`EMAIL_HOST`, `EMAIL_USER`, `EMAIL_PASS`, `NOTIFICATION_EMAIL_FROM`, `NOTIFICATION_EMAIL_TO`). If these are not fully set, a warning is logged to the console indicating that email notifications are disabled and will be limited to console output.
+    *   The `sendNotification` function is now implemented using `nodemailer` to send email notifications if the aforementioned environment variables are correctly configured.
+    *   If email configuration is incomplete or if an error occurs during email sending, `sendNotification` logs the notification details to the console as a fallback.
+    *   Critical notifications are triggered for:
         *   Failure to initialize the Supabase client.
         *   Critical errors during the main strategy processing loop.
         *   Any unhandled top-level exceptions that would terminate the agent.
-    *   A non-critical warning notification is sent if no search strategies are found, or if a processing queue for an initial site hits `MAX_ITERATIONS_PER_INITIAL_SITE`.
+    *   Warning notifications are sent if no search strategies are found or if a processing queue for an initial site hits `MAX_ITERATIONS_PER_INITIAL_SITE`.
 *   **Supabase Errors:** Errors during Supabase operations (insert, update) are caught, logged to the console, and for individual record updates, the agent typically continues processing.
 
 ## 9. Supabase Table Interactions

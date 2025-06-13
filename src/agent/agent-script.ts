@@ -9,6 +9,7 @@
 import { config } from 'dotenv';
 config(); // Load .env file for local development/testing of this script
 
+import * as nodemailer from 'nodemailer';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import robotsParser from 'robots-parser';
 import type { ProcessedContent, SearchStrategy } from '@/lib/definitions'; // Adjust path as needed
@@ -66,7 +67,9 @@ const OUR_USER_AGENT = 'ContentCuratorBot/1.0 (+http://yourprojecturl.com/botinf
  * @param isCritical - Whether the notification is for a critical error (true) or a warning (false).
  */
 async function sendNotification(subject: string, body: string, isCritical: boolean = true): Promise<void> {
-  console.log(`\n--- AGENT NOTIFICATION ---`);
+  // Original console logging (slightly adjusted for clarity)
+  console.log(`
+--- AGENT NOTIFICATION ATTEMPT (${new Date().toISOString()}) ---`);
   if (isCritical) {
     console.error(`🔴 CRITICAL ERROR ALERT 🔴`);
   } else {
@@ -74,26 +77,60 @@ async function sendNotification(subject: string, body: string, isCritical: boole
   }
   console.log(`Subject: ${subject}`);
   console.log(`Body:\n${body}`);
-  console.log(`--- END OF NOTIFICATION ---`);
-  // TODO: Implement actual notification logic (e.g., email using Nodemailer, Slack API call).
-  // This would likely involve:
-  // 1. Importing necessary libraries (e.g., nodemailer).
-  // 2. Using environment variables for credentials and destination addresses:
-  //    - EMAIL_HOST, EMAIL_PORT, EMAIL_USER, EMAIL_PASS (for SMTP)
-  //    - NOTIFICATION_EMAIL_FROM, NOTIFICATION_EMAIL_TO
-  //    - SLACK_WEBHOOK_URL
-  // 3. Constructing and sending the notification.
-  // Example (conceptual for email):
-  // if (process.env.EMAIL_HOST && process.env.NOTIFICATION_EMAIL_TO) {
-  //   // const transporter = nodemailer.createTransport({...});
-  //   // await transporter.sendMail({
-  //   //   from: process.env.NOTIFICATION_EMAIL_FROM,
-  //   //   to: process.env.NOTIFICATION_EMAIL_TO,
-  //   //   subject: `Agent Notification: ${subject}`,
-  //   //   text: body,
-  //   // });
-  // }
-  return Promise.resolve(); // Make it async-ready
+
+  const {
+    EMAIL_HOST, EMAIL_PORT, EMAIL_USER, EMAIL_PASS,
+    EMAIL_SECURE, NOTIFICATION_EMAIL_FROM, NOTIFICATION_EMAIL_TO
+  } = process.env;
+
+  if (!EMAIL_HOST || !EMAIL_USER || !EMAIL_PASS || !NOTIFICATION_EMAIL_FROM || !NOTIFICATION_EMAIL_TO) {
+    console.warn('Email notification functionality is disabled: Required email environment variables are not all set.');
+    console.log(`--- END OF NOTIFICATION LOG (Email not sent) ---`);
+    return;
+  }
+
+  try {
+    const transporter = nodemailer.createTransport({
+      host: EMAIL_HOST,
+      port: parseInt(EMAIL_PORT || '587', 10), // Default to 587 if not set
+      secure: EMAIL_SECURE === 'true', // `secure:true` for port 465, `false` for others
+      auth: {
+        user: EMAIL_USER,
+        pass: EMAIL_PASS
+      },
+      logger: process.env.NODE_ENV === 'development', // Optional: log nodemailer activity in dev
+      debug: process.env.NODE_ENV === 'development',  // Optional: log nodemailer activity in dev
+    });
+
+    // Verify connection configuration (optional, but good for diagnosing SMTP issues)
+    // Disabling verify for now as it can cause issues with some providers if not handled carefully
+    // await transporter.verify();
+    // console.log('Nodemailer transporter configured and verified successfully.');
+
+    const mailOptions = {
+      from: `Content Agent <${NOTIFICATION_EMAIL_FROM}>`, // Adding a sender name
+      to: NOTIFICATION_EMAIL_TO,
+      subject: `Content Agent (${isCritical ? 'CRITICAL' : 'WARNING'}): ${subject}`,
+      text: body,
+      html: `<p>${body.replace(/\n/g, '<br>')}</p>` // Simple HTML version
+    };
+
+    console.log(`Attempting to send notification email via ${EMAIL_HOST} to: ${NOTIFICATION_EMAIL_TO}...`);
+    const info = await transporter.sendMail(mailOptions);
+    console.log('Notification email sent successfully. Message ID:', info.messageId);
+    // console.log('Preview URL: %s', nodemailer.getTestMessageUrl(info)); // For Ethereal email testing
+  } catch (error: any) {
+    console.error('Failed to send notification email via Nodemailer.');
+    console.error('Email Sending Error Details:', error.message);
+    // Log more details if available, e.g., error.response for SMTP errors
+    if (error.response) {
+        console.error('SMTP Response:', error.response);
+    }
+    if (error.code) {
+        console.error('Nodemailer Error Code:', error.code);
+    }
+  }
+  console.log(`--- END OF NOTIFICATION LOG ---`);
 }
 
 // Interface for the extracted article content
@@ -568,6 +605,28 @@ async function storeResultsInSupabase(supabaseClient: SupabaseClient, processedD
  */
 async function runAgent() {
   console.log(`Content Curator Agent started running at: ${new Date().toISOString()}`);
+
+  // Startup check for email notification configuration
+  const { EMAIL_HOST, EMAIL_USER, EMAIL_PASS, NOTIFICATION_EMAIL_FROM, NOTIFICATION_EMAIL_TO } = process.env;
+  if (!EMAIL_HOST || !EMAIL_USER || !EMAIL_PASS || !NOTIFICATION_EMAIL_FROM || !NOTIFICATION_EMAIL_TO) {
+    console.warn(`
+--- [AGENT STARTUP WARNING] ---
+Email notification system is not fully configured.
+Notifications will be limited to console output until all required email environment variables are set.
+Please check: EMAIL_HOST, EMAIL_USER, EMAIL_PASS, NOTIFICATION_EMAIL_FROM, NOTIFICATION_EMAIL_TO.
+
+Current values (undefined means not set, sensitive fields are masked if present):
+  EMAIL_HOST: ${EMAIL_HOST}
+  EMAIL_USER: ${EMAIL_USER ? '***' : undefined}
+  EMAIL_PASS: ${EMAIL_PASS ? '***' : undefined}
+  NOTIFICATION_EMAIL_FROM: ${NOTIFICATION_EMAIL_FROM}
+  NOTIFICATION_EMAIL_TO: ${NOTIFICATION_EMAIL_TO}
+-------------------------------
+`);
+  } else {
+    console.log('[AGENT STARTUP] Email notification system appears to be configured.');
+  }
+
   const globallyProcessedOrQueuedUrlsInThisRun = new Set<string>(); // Tracks all URLs processed or queued in this entire agent run
   let supabaseClient;
 
