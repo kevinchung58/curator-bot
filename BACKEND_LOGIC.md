@@ -50,6 +50,7 @@ The agent's behavior is configured through environment variables and internal co
 *   **Link Discovery Configuration:**
     *   `MAX_DISCOVERED_LINKS_PER_STRATEGY_SITE`: Maximum number of new links to process that are discovered from a single initial strategy site and its subsequent child pages (Default: 10).
     *   `STAY_ON_SAME_DOMAIN`: Boolean flag to control if discovered links must be on the same domain as their originating `initialSiteUrl` from the strategy (Default: `true`).
+    *   `MAX_CRAWL_DEPTH`: Controls how many levels deep the agent will follow discovered links from an initial strategy site (e.g., 0 for initial sites only, 1 for links on initial sites, etc. Default: 1).
 *   **Status Constants (`STATUS` object):** A defined set of string constants representing the various states of content processing (see Status Management section).
 
 ## 4. Core Workflow (`runAgent` function)
@@ -67,7 +68,7 @@ The `runAgent` function orchestrates the entire content curation process:
 3.  **Iterate Through Strategies and Process URL Queue:**
     *   The agent loops through each `strategy`.
     *   For each `strategy`, it then iterates through each `initialSiteUrl` listed in `strategy.targetSites`.
-    *   A processing queue (`urlsToProcess`) is initialized for each `initialSiteUrl`, starting with the `initialSiteUrl` itself. Each item in this queue is an object: `{ url: string; isDiscovered: boolean; originalStrategyKeywords: string[]; }`.
+    *   A processing queue (`urlsToProcess`) is initialized for each `initialSiteUrl`, starting with the `initialSiteUrl` itself with `depth: 0`. Each item in this queue is an object: `{ url: string; isDiscovered: boolean; originalStrategyKeywords: string[]; depth: number; }`.
     *   A `while` loop continues as long as there are URLs in `urlsToProcess` (and safety iteration limits are not met).
 
 4.  **Process Each URL from the Queue (`currentUrlToProcess`):**
@@ -93,11 +94,12 @@ The `runAgent` function orchestrates the entire content curation process:
         *   **Link Discovery and Queueing:**
             *   If `discoveredLinks` are found in the `ExtractedArticle` object:
                 *   Each link is checked against several conditions before being added to the `urlsToProcess` queue for the *current* `initialSiteUrl`'s discovery branch.
+                *   **Depth Check:** The `depth` of the current URL (`currentDepth`) is retrieved. If `currentDepth + 1` (the depth of the potential discovered link) exceeds `MAX_CRAWL_DEPTH`, the link is skipped, and no further links from the *current page* are processed for queueing (as an optimization). Log message indicates this.
                 *   **Domain Check:** If `STAY_ON_SAME_DOMAIN` is true, links to different domains than the `initialSiteUrl`'s domain are skipped.
                 *   **Global Run Check:** Links already in `globallyProcessedOrQueuedUrlsInThisRun` are skipped.
                 *   **Limit Check:** If the number of discovered links processed for the current `initialSiteUrl`'s branch (`discoveredLinksProcessedCountForInitialSite`) has reached `MAX_DISCOVERED_LINKS_PER_STRATEGY_SITE`, no more links from the current page are queued.
                 *   **Supabase Duplicate Check:** Discovered links are checked against `curated_content` via `checkForDuplicates()` and skipped if already present.
-                *   Valid new links are added to `urlsToProcess` as objects `{ url: discoveredLink, isDiscovered: true, originalStrategyKeywords: currentUrlObject.originalStrategyKeywords }`, and also to `globallyProcessedOrQueuedUrlsInThisRun`. The `discoveredLinksProcessedCountForInitialSite` is incremented.
+                *   Valid new links are added to `urlsToProcess` as objects `{ url: discoveredLink, isDiscovered: true, originalStrategyKeywords: currentUrlObject.originalStrategyKeywords, depth: currentUrlObject.depth + 1 }`, and also to `globallyProcessedOrQueuedUrlsInThisRun`. The `discoveredLinksProcessedCountForInitialSite` is incremented.
     *   **AI Processing (`triggerAIProcessing`):**
         *   If content was suitable for AI processing (e.g., not an empty extraction), the status is updated to `STATUS.AI_PROCESSING_INITIATED`.
         *   `triggerAIProcessing()` is called, passing the `currentUrlToProcess` and its `originalStrategyKeywords`.
@@ -123,15 +125,16 @@ A significant feature of the agent is its ability to discover and process hyperl
 *   **Queueing and Processing in `runAgent`:**
     *   When `runAgent` processes a URL (either an initial strategy site or a previously discovered link), it retrieves the `discoveredLinks` after `fetchWebContent`.
     *   These links are then subject to several checks before being added to the current processing queue (`urlsToProcess`):
-        1.  **Domain Restriction (`STAY_ON_SAME_DOMAIN`):** If enabled, links pointing to a different hostname than the original `initialSiteUrl` (from the strategy) are ignored. This keeps the discovery focused.
-        2.  **Global Uniqueness for Current Run:** Links already present in `globallyProcessedOrQueuedUrlsInThisRun` (meaning they've been processed or queued in the current agent execution, possibly from another strategy or discovery path) are ignored to prevent redundant work and cycles within the same run.
-        3.  **Per-Strategy Site Limit (`MAX_DISCOVERED_LINKS_PER_STRATEGY_SITE`):** A counter tracks how many new links have been queued that originated from the current `initialSiteUrl`'s discovery path. Once this limit is reached, no more links from that specific discovery branch are added from subsequent pages in that branch.
-        4.  **Supabase Duplicate Check:** `checkForDuplicates` ensures the link hasn't been successfully processed in a *previous* agent run.
-    *   Links that pass all these checks are added to the `urlsToProcess` queue as objects `{ url: discoveredLink, isDiscovered: true, originalStrategyKeywords: ... }`. The `isDiscovered: true` flag and inherited `originalStrategyKeywords` allow for differentiated processing or tagging.
+        1.  **Depth Check:** The calculated depth of a discovered link (`current_depth + 1`) must not exceed `MAX_CRAWL_DEPTH`. If it does, the link (and subsequent links from the same source page) are skipped.
+        2.  **Domain Restriction (`STAY_ON_SAME_DOMAIN`):** If enabled, links pointing to a different hostname than the original `initialSiteUrl` (from the strategy) are ignored. This keeps the discovery focused.
+        3.  **Global Uniqueness for Current Run:** Links already present in `globallyProcessedOrQueuedUrlsInThisRun` (meaning they've been processed or queued in the current agent execution, possibly from another strategy or discovery path) are ignored to prevent redundant work and cycles within the same run.
+        4.  **Per-Strategy Site Limit (`MAX_DISCOVERED_LINKS_PER_STRATEGY_SITE`):** A counter tracks how many new links have been queued that originated from the current `initialSiteUrl`'s discovery path. Once this limit is reached, no more links from that specific discovery branch are added from subsequent pages in that branch.
+        5.  **Supabase Duplicate Check:** `checkForDuplicates` ensures the link hasn't been successfully processed in a *previous* agent run.
+    *   Links that pass all these checks are added to the `urlsToProcess` queue as objects `{ url: discoveredLink, isDiscovered: true, originalStrategyKeywords: ..., depth: newDepth }`. The `isDiscovered: true` flag, inherited `originalStrategyKeywords`, and calculated `depth` allow for differentiated processing and control.
 
 *   **Contextual Tagging:** When an initial record is created in Supabase for a discovered link, a `'discovered'` tag is automatically added to its tags, along with the keywords from the strategy that led to its discovery.
 
-This discovery mechanism allows the agent to expand its reach beyond the initial seed URLs in a controlled manner, finding potentially relevant related content.
+This discovery mechanism, now with depth control, allows the agent to expand its reach beyond the initial seed URLs in a controlled manner, finding potentially relevant related content.
 
 ## 6. Key Functions
 

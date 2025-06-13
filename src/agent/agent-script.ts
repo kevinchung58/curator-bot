@@ -64,6 +64,7 @@ const STATUS = {
 // Configuration for Link Discovery
 const MAX_DISCOVERED_LINKS_PER_STRATEGY_SITE = 10; // Max new links to process from one initial strategy site's discovery path
 const STAY_ON_SAME_DOMAIN = true; // If true, discovered links must be on the same domain as their origin (initial strategy site)
+const MAX_CRAWL_DEPTH = 1; // 0: initial sites only; 1: links on initial sites; etc.
 
 const OUR_USER_AGENT = 'ContentCuratorBot/1.0 (+http://yourprojecturl.com/botinfo)';
 
@@ -697,9 +698,9 @@ Current values (undefined means not set, sensitive fields are masked if present)
         const baseStrategyKeywords = strategy.keywords || ['untagged'];
 
         for (const initialSiteUrl of (strategy.targetSites || [])) {
-        // Queue items will now be objects to carry discovery context
-        const urlsToProcess: { url: string; isDiscovered: boolean; originalStrategyKeywords: string[]; }[] = [
-          { url: initialSiteUrl, isDiscovered: false, originalStrategyKeywords: baseStrategyKeywords }
+        // Queue items will now be objects to carry discovery context, including depth
+        const urlsToProcess: { url: string; isDiscovered: boolean; originalStrategyKeywords: string[]; depth: number; }[] = [
+          { url: initialSiteUrl, isDiscovered: false, originalStrategyKeywords: baseStrategyKeywords, depth: 0 }
         ];
         let discoveredLinksProcessedCountForInitialSite = 0;
         let initialSiteHostname: string | undefined;
@@ -721,12 +722,12 @@ Current values (undefined means not set, sensitive fields are masked if present)
 
         while (urlsToProcess.length > 0 && iterationCount < MAX_ITERATIONS_PER_INITIAL_SITE) {
           iterationCount++;
-          const currentUrlObject = urlsToProcess.shift(); // Now an object
+          const currentUrlObject = urlsToProcess.shift();
           if (!currentUrlObject) continue;
 
-          const { url: currentUrlToProcess, isDiscovered, originalStrategyKeywords } = currentUrlObject;
+          const { url: currentUrlToProcess, isDiscovered, originalStrategyKeywords, depth: currentDepth } = currentUrlObject;
 
-          console.log(`\n---\nAttempting to process URL: ${currentUrlToProcess} (Origin: ${initialSiteUrl}, Discovered: ${isDiscovered})`);
+          console.log(`\n---\nAttempting to process URL: ${currentUrlToProcess} (Origin: ${initialSiteUrl}, Discovered: ${isDiscovered}, Depth: ${currentDepth})`);
 
           // Check if URL was already processed or queued in this entire agent run
           // Allow initialSiteUrl to proceed if it's its first appearance from this specific strategy's initialSiteUrl list
@@ -843,6 +844,22 @@ Current values (undefined means not set, sensitive fields are masked if present)
           if (discoveredLinksOnPage.length > 0 && canProcessMoreLinksFromThisBranch) {
             console.log(`Processing up to ${MAX_DISCOVERED_LINKS_PER_STRATEGY_SITE - discoveredLinksProcessedCountForInitialSite} discovered links from ${currentUrlToProcess} (Origin: ${initialSiteUrl})`);
             for (const discoveredLink of discoveredLinksOnPage) {
+              const nextDepth = currentDepth + 1;
+              if (nextDepth > MAX_CRAWL_DEPTH) {
+                console.log(`Skipping discovered link (depth limit exceeded ${nextDepth} > ${MAX_CRAWL_DEPTH}): ${discoveredLink} from page ${currentUrlToProcess}`);
+                // We can `break` here if links are somewhat ordered or if we assume further links on this page are also too deep.
+                // However, if links on a page can have varying "importance" and MAX_DISCOVERED_LINKS_PER_STRATEGY_SITE is small,
+                // continuing might allow other, shallower (if that were possible, though not with current depth model) or different links.
+                // For now, let's just skip this specific link and continue checking others from the same page.
+                // If we want to stop processing any more links from *this specific page* once one is too deep, we'd break.
+                // The prompt implies checking each link, so `continue` is appropriate.
+                // If all further links from this page will also be nextDepth, then break is more efficient.
+                // Let's assume for now all links from this page are effectively at `currentDepth`, so their children are `nextDepth`.
+                // If one child is too deep, all children from this page are too deep.
+                console.log(`Further link discovery from page ${currentUrlToProcess} will exceed MAX_CRAWL_DEPTH. Stopping discovery from this page.`);
+                break; // Stop processing further links from THIS page if its children are too deep.
+              }
+
               if (discoveredLinksProcessedCountForInitialSite >= MAX_DISCOVERED_LINKS_PER_STRATEGY_SITE) {
                 console.log(`Reached max discovered links (${MAX_DISCOVERED_LINKS_PER_STRATEGY_SITE}) for origin ${initialSiteUrl}. No more links will be queued from this page (${currentUrlToProcess}).`);
                 break;
@@ -873,17 +890,19 @@ Current values (undefined means not set, sensitive fields are masked if present)
                 continue;
               }
 
-              console.log(`Queueing discovered link: ${discoveredLink} (Origin: ${initialSiteUrl}, Original Keywords: ${originalStrategyKeywords.join(', ')})`);
-              urlsToProcess.push({ url: discoveredLink, isDiscovered: true, originalStrategyKeywords }); // Pass original keywords
+              const nextDepth = currentDepth + 1;
+              console.log(`Queueing discovered link: ${discoveredLink} (Origin: ${initialSiteUrl}, Depth: ${nextDepth}, Keywords: ${originalStrategyKeywords.join(', ')})`);
+              urlsToProcess.push({
+                url: discoveredLink,
+                isDiscovered: true,
+                originalStrategyKeywords,
+                depth: nextDepth
+              });
               globallyProcessedOrQueuedUrlsInThisRun.add(discoveredLink);
-              // Increment count only for links that are NOT the initial strategy site itself being re-processed through discovery.
-              // And only if this current URL is not the initial site.
-              // This logic is tricky: we want to limit links *discovered from* the initial site and its children.
-              // The count should apply to the branch originating from `initialSiteUrl`.
               discoveredLinksProcessedCountForInitialSite++;
             }
           } else if (discoveredLinksOnPage.length > 0 && !canProcessMoreLinksFromThisBranch) {
-             console.log(`Limit for discovered links from origin ${initialSiteUrl} already met. No new links from ${currentUrlToProcess} will be queued.`);
+             console.log(`Limit for discovered links from origin ${initialSiteUrl} already met. No new links from ${currentUrlToProcess} will be queued now.`);
           }
 
 
