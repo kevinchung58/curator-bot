@@ -107,7 +107,7 @@ AI 圖像生成 (Image Generation)
     [x] 1. 設定測試環境與選擇測試框架 (例如：Jest, React Testing Library)。 (已為 agent-script.ts 設定 Jest)。
     [x] 1.1. 為 `agent-script.ts` 撰寫單元測試與整合測試。
     [x] 2. 為核心 AI 流程 (Genkit Flows) 撰寫單元測試。 (已為 `generateContentSummary`, `formulateSearchStrategy`, 及 `generateIllustrativeImage` flows 撰寫測試)。
-    [ ] 3. 為主要的 Server Actions 撰寫整合測試。
+    [x] 3. 為主要的 Server Actions 撰寫整合測試。 (已為 agent 使用的 /api/agent/process-content API route 撰寫整合測試)。
     [ ] 4. 為關鍵的 UI 組件撰寫組件測試。
     [ ] 5. (可選) 考慮為主要使用者操作流程撰寫端對端 (E2E) 測試。
 
