@@ -2,9 +2,9 @@
 name: Content Curator Agent
 
 on:
-  schedule:
-    # Runs every hour at the start of the hour
-    - cron: '0 * * * *'
+  # schedule:
+  #   # Runs every hour at the start of the hour
+  #   - cron: '0 * * * *'
   workflow_dispatch: # Allows manual triggering from the GitHub UI
 
 jobs:
