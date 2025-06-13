@@ -148,7 +148,7 @@ UI/UX 優化
 [~] **依賴管理**
     目標: 定期檢查並更新 `package.json` 中的套件版本。
     [x] 1. 定期執行 `npm outdated` (或 `yarn outdated`) 來檢查過期的依賴。 (已執行檢查並將結果回報給使用者，待後續決定是否進行更新)。
-    [ ] 2. 評估並規劃主要依賴項 (如 Next.js, Genkit, ShadCN UI) 的版本升級，注意潛在的破壞性更新。
+    [~] 2. 評估並規劃主要依賴項 (如 Next.js, Genkit, ShadCN UI) 的版本升級，注意潛在的破壞性更新。 (初步嘗試更新一批選定的非主要版本依賴，但因測試失敗已復原。建議未來更新應更小批量、逐個進行，並仔細評估重大版本更新的潛在破壞性影響)。
     [x] 3. (Agent) Added `@supabase/supabase-js` and `dotenv`.
 
     
