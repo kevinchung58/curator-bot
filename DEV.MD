@@ -45,6 +45,8 @@ AI 圖像生成 (Image Generation)
 
 📝 待辦事項 (TODO List)
 
+*   **注意:** 後端代理腳本 (`src/agent/agent-script.ts`) 的詳細邏輯已記錄在 `BACKEND_LOGIC.md` 檔案中。
+
 核心功能與後端
 
 [~] **開發內容自動監控代理 (Agent)**
@@ -66,9 +68,9 @@ AI 圖像生成 (Image Generation)
             [x] 2.1.2. (Agent 腳本) 實作核心內容處理循環：讀取策略 -> (爬取/發現URL) -> 檢查重複 -> (透過API)AI處理 -> 儲存。(腳本中主要循環邏輯已初步實現)
         [~] 2.2. **網頁內容爬取與解析 (Web Content Scraping & Parsing)**
             [~] 2.2.1. 設計與實作爬蟲邏輯。 (Agent 腳本中 `fetchWebContent` 基礎實現已加入 User-Agent。進階爬取多個連結待開發)
-            [ ] 2.2.2. 實作 `robots.txt` 遵循機制。
-            [ ] 2.2.3. 實作網頁主要內容提取邏輯 (若 Agent 需要直接解析而非僅傳遞 URL 到 AI Flow)。(目前依賴AI Flow內部工具)
-            [ ] 2.2.4. 提升處理不同網頁結構的彈性與錯誤處理。
+            [x] 2.2.2. 實作 `robots.txt` 遵循機制。
+            [x] 2.2.3. 實作網頁主要內容提取邏輯 (若 Agent 需要直接解析而非僅傳遞 URL 到 AI Flow)。(目前依賴AI Flow內部工具)
+            [x] 2.2.4. 提升處理不同網頁結構的彈性與錯誤處理。
         [~] 2.3. **整合使用者定義的搜尋策略 (Integrate User-defined Search Strategies)**
             [x] 2.3.1. 實作從資料庫 (Supabase `search_strategies` 表) 讀取使用者設定的搜尋策略。(Agent 腳本中 `fetchStrategiesFromSupabase` 已包含 Supabase 查詢邏輯，並有 mock 回退)
             [~] 2.3.2. 根據讀取的策略執行內容搜尋或網站爬取 (目前僅處理 `targetSites` 中的 URL)。
@@ -82,8 +84,8 @@ AI 圖像生成 (Image Generation)
             [x] 2.6.1. 將 Agent 發現並成功處理完的內容儲存到永久性資料庫 (Supabase `curated_content` 表)。(Agent 腳本中 `storeResultsInSupabase` 已包含 Supabase 插入邏輯，並能儲存詳細 progress/error)
 
     [ ] **3. Agent 狀態回報與監控 (Agent Status Reporting & Monitoring)**
-        [ ] 3.1. 設計 Agent 運行狀態的回報機制 (例如，寫入 Supabase 特定表格，或透過 webhook)。
-        [ ] 3.2. (前端) 改造現有模擬的 Agent 狀態顯示，使其能讀取並顯示真實的 Agent 運行狀態。(目前為模擬，待真實狀態接入)
+        [x] 3.1. 設計 Agent 運行狀態的回報機制 (例如，寫入 Supabase 特定表格，或透過 webhook)。 (已增強對 curated_content 表的詳細狀態更新)。
+        [~] 3.2. (前端) 改造現有模擬的 Agent 狀態顯示，使其能讀取並顯示真實的 Agent 運行狀態。(目前為模擬，待真實狀態接入) (已建立後端 API /api/curated-content 以供前端讀取真實狀態，前端組件更新待處理)
 
 [ ] **內容版本控制或歷史紀錄 (可選，未來功能)**
     目標: 考慮建立一個簡單的系統來追蹤內容在何時被處理、發送到 LINE 或發布到 GitHub。
@@ -102,7 +104,8 @@ AI 圖像生成 (Image Generation)
 
 [ ] **撰寫測試程式碼**
     目標: 為關鍵功能撰寫單元測試 (Unit Tests) 與整合測試 (Integration Tests)，以確保程式碼的穩定性。
-    [ ] 1. 設定測試環境與選擇測試框架 (例如：Jest, React Testing Library)。
+    [x] 1. 設定測試環境與選擇測試框架 (例如：Jest, React Testing Library)。 (已為 agent-script.ts 設定 Jest)。
+    [x] 1.1. 為 `agent-script.ts` 撰寫單元測試與整合測試。
     [ ] 2. 為核心 AI 流程 (Genkit Flows) 撰寫單元測試。
     [ ] 3. 為主要的 Server Actions 撰寫整合測試。
     [ ] 4. 為關鍵的 UI 組件撰寫組件測試。
@@ -110,9 +113,9 @@ AI 圖像生成 (Image Generation)
 
 [~] **全面性的錯誤處理強化 (尤其針對 Agent)**
     目標: 為未來的「自動監控代理」建立健全的日誌記錄和錯誤恢復機制。
-    [ ] 1. (Agent) 設計並實作針對網路請求、API 呼叫失敗的錯誤重試機制。
+    [x] 1. (Agent) 設計並實作針對網路請求、API 呼叫失敗的錯誤重試機制。 (已在 `fetchWebContent` 中實現)；API 呼叫的重試機制待評估。
     [x] 2. (Agent) 實作更詳細、結構化的錯誤日誌記錄到 Supabase 或 GitHub Actions Logs。(GitHub Actions workflow 已設定，Agent 腳本包含 console.log，Supabase現可儲存詳細錯誤訊息，可進一步增強)
-    [ ] 3. (Agent) 設定當發生嚴重錯誤或 Agent 執行失敗時的通知機制。
+    [~] 3. (Agent) 設定當發生嚴重錯誤或 Agent 執行失敗時的通知機制 (已建立 `sendNotification` 存根並整合到 `agent-script.ts` 的關鍵錯誤點)。
 
 [ ] **持續進行程式碼重構**
     目標: 持續優化程式碼結構，移除重複程式碼，提高可讀性與可維護性。

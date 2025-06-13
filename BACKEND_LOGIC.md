@@ -33,6 +33,9 @@ The agent's behavior is configured through environment variables and internal co
     *   `FETCH_TIMEOUT_MS`: Timeout for each fetch attempt (Default: 15000ms).
 *   **User Agent:**
     *   `OUR_USER_AGENT`: The user agent string the agent uses for HTTP requests (e.g., `ContentCuratorBot/1.0 (+http://yourprojecturl.com/botinfo)`).
+*   **Link Discovery Configuration:**
+    *   `MAX_DISCOVERED_LINKS_PER_STRATEGY_SITE`: Maximum number of new links to process that are discovered from a single initial strategy site and its subsequent child pages (Default: 10).
+    *   `STAY_ON_SAME_DOMAIN`: Boolean flag to control if discovered links must be on the same domain as their originating `initialSiteUrl` from the strategy (Default: `true`).
 *   **Status Constants (`STATUS` object):** A defined set of string constants representing the various states of content processing (see Status Management section).
 
 ## 4. Core Workflow (`runAgent` function)
@@ -45,13 +48,20 @@ The `runAgent` function orchestrates the entire content curation process:
 2.  **Fetch Search Strategies:**
     *   Calls `fetchStrategiesFromSupabase()` to retrieve search strategies from the `search_strategies` table.
     *   If no strategies are found, a warning notification is sent, and the agent exits.
+    *   Initializes a global set `globallyProcessedOrQueuedUrlsInThisRun` to track all URLs encountered during the current agent run to prevent redundant processing.
 
-3.  **Iterate Through Strategies and URLs:**
-    *   The agent loops through each strategy and then through each `targetSite` (URL) defined within that strategy.
+3.  **Iterate Through Strategies and Process URL Queue:**
+    *   The agent loops through each `strategy`.
+    *   For each `strategy`, it then iterates through each `initialSiteUrl` listed in `strategy.targetSites`.
+    *   A processing queue (`urlsToProcess`) is initialized for each `initialSiteUrl`, starting with the `initialSiteUrl` itself. Each item in this queue is an object: `{ url: string; isDiscovered: boolean; originalStrategyKeywords: string[]; }`.
+    *   A `while` loop continues as long as there are URLs in `urlsToProcess` (and safety iteration limits are not met).
 
-4.  **Process Each URL:** For every URL, the following steps are performed:
-    *   **Duplicate Check:** Calls `checkForDuplicates()` to see if the URL has already been successfully processed and stored in `curated_content`. If it's a duplicate, it's skipped.
-    *   **Initial Record Creation:** If not a duplicate, an initial record is inserted into the `curated_content` table with a status of `STATUS.PROCESSING_STARTED`. This record is then updated throughout the subsequent steps.
+4.  **Process Each URL from the Queue (`currentUrlToProcess`):**
+    *   **Global Run Check:** The URL is first checked against `globallyProcessedOrQueuedUrlsInThisRun`. If already present (and not an `initialSiteUrl` being processed for the first time in its specific strategy context), it's skipped. Otherwise, it's added to this global set.
+    *   **Supabase Duplicate Check:** Calls `checkForDuplicates()` to see if the URL already exists in the `curated_content` table (i.e., processed in a *previous* agent run). If so, it's skipped.
+    *   **Initial Record Creation:** If not a duplicate, an initial record is inserted into `curated_content`.
+        *   The `status` is set to `STATUS.PROCESSING_STARTED`.
+        *   If the URL `isDiscovered`, a `'discovered'` tag is added to the `originalStrategyKeywords` inherited from its originating strategy.
     *   **Content Fetching (`fetchWebContent`):**
         *   **`robots.txt` Compliance:**
             *   The `robots.txt` file for the target domain is fetched using `getRobotsTxtUrl()`.
@@ -61,33 +71,69 @@ The `runAgent` function orchestrates the entire content curation process:
             *   This fetch operation includes a retry mechanism (`MAX_FETCH_RETRIES`, `FETCH_RETRY_DELAY_MS`) for transient network errors or server-side issues (5xx errors).
             *   A timeout (`FETCH_TIMEOUT_MS`) is applied to each fetch attempt.
             *   If fetching fails after all retries, the status is updated to `STATUS.ERROR_FETCHING`, and processing for this URL stops.
-        *   **Content Extraction (`extractMainContent`):**
+        *   **Content & Link Extraction (`extractMainContent`):**
             *   If raw HTML content is successfully fetched, its status is updated to `STATUS.CONTENT_FETCHED`.
-            *   `extractMainContent()` is called, which uses `JSDOM` to parse the HTML and `Readability` to extract the main article content (title, text, simplified HTML, excerpt, byline).
-            *   Status is updated to `STATUS.CONTENT_EXTRACTED` on success or `STATUS.ERROR_EXTRACTION` on failure. The extracted title may update the record in the database.
+            *   `extractMainContent()` is called. This function now not only extracts the main article (using JSDOM and Readability) but also discovers all valid hyperlinks (`<a>` tags) on the page via `extractLinksFromHtml`. These links are resolved to absolute URLs and filtered (protocol, basic file types).
+            *   The result (`ExtractedArticle` object) includes the main content (title, text, etc.) and an array of `discoveredLinks`.
+            *   Status is updated to `STATUS.CONTENT_EXTRACTED` on success or `STATUS.ERROR_EXTRACTION` on failure. The extracted title may update the record.
+        *   **Link Discovery and Queueing:**
+            *   If `discoveredLinks` are found in the `ExtractedArticle` object:
+                *   Each link is checked against several conditions before being added to the `urlsToProcess` queue for the *current* `initialSiteUrl`'s discovery branch.
+                *   **Domain Check:** If `STAY_ON_SAME_DOMAIN` is true, links to different domains than the `initialSiteUrl`'s domain are skipped.
+                *   **Global Run Check:** Links already in `globallyProcessedOrQueuedUrlsInThisRun` are skipped.
+                *   **Limit Check:** If the number of discovered links processed for the current `initialSiteUrl`'s branch (`discoveredLinksProcessedCountForInitialSite`) has reached `MAX_DISCOVERED_LINKS_PER_STRATEGY_SITE`, no more links from the current page are queued.
+                *   **Supabase Duplicate Check:** Discovered links are checked against `curated_content` via `checkForDuplicates()` and skipped if already present.
+                *   Valid new links are added to `urlsToProcess` as objects `{ url: discoveredLink, isDiscovered: true, originalStrategyKeywords: currentUrlObject.originalStrategyKeywords }`, and also to `globallyProcessedOrQueuedUrlsInThisRun`. The `discoveredLinksProcessedCountForInitialSite` is incremented.
     *   **AI Processing (`triggerAIProcessing`):**
-        *   If content fetching and (optionally) extraction were successful, the status is updated to `STATUS.AI_PROCESSING_INITIATED`.
-        *   `triggerAIProcessing()` is called, making a POST request to the Next.js API endpoint (`${NEXT_PUBLIC_APP_URL}/api/agent/process-content`). This endpoint is expected to handle further AI-driven analysis (e.g., summarization, tagging) using Genkit or a similar AI framework.
-        *   The `articleUrl` and `topic` (from strategy keywords) are passed to the API.
+        *   If content was suitable for AI processing (e.g., not an empty extraction), the status is updated to `STATUS.AI_PROCESSING_INITIATED`.
+        *   `triggerAIProcessing()` is called, passing the `currentUrlToProcess` and its `originalStrategyKeywords`.
     *   **Store/Update Results (`updateSupabaseRecord`):**
         *   Based on the response from `triggerAIProcessing` (or if it failed), `updateSupabaseRecord()` is called to update the record in `curated_content`.
         *   This includes setting the final `status` (e.g., `STATUS.AI_PROCESSING_SUCCESSFUL` or `STATUS.AI_PROCESSING_FAILED`), storing the AI-generated title, summary, tags, image URL (if any), and relevant progress or error messages.
 
 The agent includes a top-level `try...catch` around the main strategy processing loop and another around the `runAgent()` call itself to catch unhandled exceptions and trigger critical notifications via `sendNotification`.
 
-## 5. Key Functions
+## 5. Link Discovery and Processing
+
+A significant feature of the agent is its ability to discover and process hyperlinks found within fetched web pages. This allows for a controlled, shallow crawl starting from the initial strategy sites.
+
+*   **Extraction:** Link extraction occurs within the `extractMainContent` function. After parsing the HTML with `JSDOM`, an internal helper `extractLinksFromHtml` is called. This helper:
+    *   Finds all `<a>` elements.
+    *   Retrieves `href` attributes.
+    *   Resolves relative URLs to absolute ones using the page's base URL.
+    *   Filters links to keep only `http:` or `https:` protocols.
+    *   Applies a basic filter to exclude common non-content file types (e.g., `.css`, `.js`, `.png`, `.pdf`).
+    *   Ensures link uniqueness.
+    *   The discovered links are returned as part of the `ExtractedArticle` object.
+
+*   **Queueing and Processing in `runAgent`:**
+    *   When `runAgent` processes a URL (either an initial strategy site or a previously discovered link), it retrieves the `discoveredLinks` after `fetchWebContent`.
+    *   These links are then subject to several checks before being added to the current processing queue (`urlsToProcess`):
+        1.  **Domain Restriction (`STAY_ON_SAME_DOMAIN`):** If enabled, links pointing to a different hostname than the original `initialSiteUrl` (from the strategy) are ignored. This keeps the discovery focused.
+        2.  **Global Uniqueness for Current Run:** Links already present in `globallyProcessedOrQueuedUrlsInThisRun` (meaning they've been processed or queued in the current agent execution, possibly from another strategy or discovery path) are ignored to prevent redundant work and cycles within the same run.
+        3.  **Per-Strategy Site Limit (`MAX_DISCOVERED_LINKS_PER_STRATEGY_SITE`):** A counter tracks how many new links have been queued that originated from the current `initialSiteUrl`'s discovery path. Once this limit is reached, no more links from that specific discovery branch are added from subsequent pages in that branch.
+        4.  **Supabase Duplicate Check:** `checkForDuplicates` ensures the link hasn't been successfully processed in a *previous* agent run.
+    *   Links that pass all these checks are added to the `urlsToProcess` queue as objects `{ url: discoveredLink, isDiscovered: true, originalStrategyKeywords: ... }`. The `isDiscovered: true` flag and inherited `originalStrategyKeywords` allow for differentiated processing or tagging.
+
+*   **Contextual Tagging:** When an initial record is created in Supabase for a discovered link, a `'discovered'` tag is automatically added to its tags, along with the keywords from the strategy that led to its discovery.
+
+This discovery mechanism allows the agent to expand its reach beyond the initial seed URLs in a controlled manner, finding potentially relevant related content.
+
+## 6. Key Functions
 
 *   **`initializeSupabaseClient()`**: Initializes and returns the Supabase client instance using environment variables. Exits on failure.
 *   **`fetchStrategiesFromSupabase(client)`**: Fetches content curation strategies from the `search_strategies` table in Supabase. Returns a default strategy if none are found or on error.
 *   **`getRobotsTxtUrl(websiteUrl)`**: Constructs the full URL for a website's `robots.txt` file.
-*   **`extractMainContent(htmlContent, url)`**: Uses `JSDOM` and `@mozilla/readability` to parse HTML and extract the main article content (title, text, simplified HTML, etc.). Returns an `ExtractedArticle` object or `null`.
-*   **`fetchWebContent(targetUrl)`**: Fetches web content from a URL. Handles `robots.txt` checks, implements retry logic with timeouts for fetching the main content, and calls `extractMainContent`. Returns a `WebContentFetchResult` object containing raw HTML, extracted article, and error/status flags.
+*   **`extractLinksFromHtml(dom, baseUrl)`**: (Internal helper) Extracts, resolves, and filters hyperlinks from a JSDOM object.
+*   **`extractMainContent(htmlContent, url)`**: Uses `JSDOM` to parse HTML. It then uses `@mozilla/readability` to extract the main article content and calls `extractLinksFromHtml` to discover hyperlinks from the page. Returns an `ExtractedArticle` object (which includes `discoveredLinks`) or `null` on critical parsing errors. It attempts to return a minimal object with links even if full article extraction fails.
+*   **`fetchWebContent(targetUrl)`**: Fetches web content from a URL. Handles `robots.txt` checks, implements retry logic with timeouts for fetching the main content, and calls `extractMainContent`. Returns a `WebContentFetchResult` object containing raw HTML, the `ExtractedArticle` (with discovered links), and error/status flags.
 *   **`checkForDuplicates(client, sourceUrl)`**: Checks if a given `sourceUrl` already exists in the `curated_content` table to avoid reprocessing.
-*   **`triggerAIProcessing(articleId, articleUrl, topic)`**: Calls the external Next.js API endpoint (`/api/agent/process-content`) to perform AI-based processing on the content of the given URL. Returns a `ProcessedContent` object or `null`.
+*   **`triggerAIProcessing(articleId, articleUrl, topic)`**: Calls the external Next.js API endpoint (`/api/agent/process-content`) to perform AI-based processing on the content of the given URL. Receives `originalStrategyKeywords` as `topic`. Returns a `ProcessedContent` object or `null`.
 *   **`updateSupabaseRecord(client, sourceUrl, updates)`**: Updates an existing record in the `curated_content` table for the given `sourceUrl` with new data (status, messages, AI results, etc.).
 *   **`sendNotification(subject, body, isCritical)`**: A stub function for sending notifications (currently logs to console). Intended for critical errors or operational warnings.
+*   **`runAgent()`**: The main orchestration function. Initializes the agent, fetches strategies, and manages a queue of URLs to process (including initially targeted sites and discovered links). It handles the lifecycle of each URL: duplicate checking, initial record creation (tagging discovered links), content fetching, link discovery, AI processing, and final record updates.
 
-## 6. Status Management
+## 7. Status Management
 
 The `status` field in the `curated_content` table is crucial for tracking the state of each processed URL. The agent uses a predefined set of status constants (defined in the `STATUS` object):
 
@@ -105,7 +151,7 @@ The `status` field in the `curated_content` table is crucial for tracking the st
 
 Each step in the `runAgent` workflow updates the status in the Supabase record, along with `agent_progress_message` and `agent_error_message` fields to provide detailed tracing.
 
-## 7. Error Handling & Notifications
+## 8. Error Handling & Notifications
 
 *   **Retry Logic:** `fetchWebContent` implements a retry mechanism with delays and timeouts for fetching the main content, making it resilient to transient network issues.
 *   **Graceful Exits & Continuations:**
@@ -116,10 +162,10 @@ Each step in the `runAgent` workflow updates the status in the Supabase record, 
         *   Failure to initialize the Supabase client.
         *   Critical errors during the main strategy processing loop.
         *   Any unhandled top-level exceptions that would terminate the agent.
-    *   A non-critical warning notification is sent if no search strategies are found.
+    *   A non-critical warning notification is sent if no search strategies are found, or if a processing queue for an initial site hits `MAX_ITERATIONS_PER_INITIAL_SITE`.
 *   **Supabase Errors:** Errors during Supabase operations (insert, update) are caught, logged to the console, and for individual record updates, the agent typically continues processing.
 
-## 8. Supabase Table Interactions
+## 9. Supabase Table Interactions
 
 The agent primarily interacts with two Supabase tables:
 

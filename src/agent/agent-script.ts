@@ -51,6 +51,10 @@ const STATUS = {
   ERROR: 'error', // Generic error status for unexpected issues
 };
 
+// Configuration for Link Discovery
+const MAX_DISCOVERED_LINKS_PER_STRATEGY_SITE = 10; // Max new links to process from one initial strategy site's discovery path
+const STAY_ON_SAME_DOMAIN = true; // If true, discovered links must be on the same domain as their origin (initial strategy site)
+
 const OUR_USER_AGENT = 'ContentCuratorBot/1.0 (+http://yourprojecturl.com/botinfo)';
 
 // --- Notification Function Stub ---
@@ -101,6 +105,7 @@ interface ExtractedArticle {
   byline?: string;
   dir?: string;
   length?: number;
+  discoveredLinks: string[]; // Added for new requirement
 }
 
 /**
@@ -178,38 +183,87 @@ function getRobotsTxtUrl(websiteUrl: string): string {
   return `${urlObj.protocol}//${urlObj.host}/robots.txt`;
 }
 
-// Function to extract main content using Readability
+/**
+ * Extracts unique, absolute HTTP/HTTPS links from a JSDOM object.
+ * @param dom The JSDOM instance of the page.
+ * @param baseUrl The base URL of the page to resolve relative links.
+ * @returns An array of unique string URLs.
+ */
+function extractLinksFromHtml(dom: JSDOM, baseUrl: string): string[] {
+  const links = new Set<string>();
+  const elements = dom.window.document.querySelectorAll('a');
+
+  elements.forEach(element => {
+    const href = element.getAttribute('href');
+    if (href) {
+      try {
+        const absoluteUrl = new URL(href, baseUrl).href;
+        const urlObj = new URL(absoluteUrl); // Parse again to check protocol easily
+        if (urlObj.protocol === 'http:' || urlObj.protocol === 'https:') {
+          // Basic filter for common non-content file types - can be expanded
+          const path = urlObj.pathname.toLowerCase();
+          if (!path.endsWith('.css') && !path.endsWith('.js') &&
+              !path.endsWith('.png') && !path.endsWith('.jpg') && !path.endsWith('.jpeg') &&
+              !path.endsWith('.gif') && !path.endsWith('.svg') && !path.endsWith('.zip') &&
+              !path.endsWith('.pdf') && !path.endsWith('.xml') && !path.endsWith('.json')) {
+            links.add(absoluteUrl);
+          }
+        }
+      } catch (e) {
+        // console.warn(`Invalid URL found or error in processing link "${href}": ${e.message}`);
+      }
+    }
+  });
+  return Array.from(links);
+}
+
+// Function to extract main content using Readability and also discover links
 function extractMainContent(htmlContent: string, url: string): ExtractedArticle | null {
-  console.log(`Extracting main content from URL: ${url}`);
+  console.log(`Extracting main content and links from URL: ${url}`);
   try {
     const doc = new JSDOM(htmlContent, { url });
     // Set the document URL, which Readability uses for better parsing
     doc.window.document.documentURI = url;
+
     const reader = new Readability(doc.window.document);
     const article = reader.parse();
 
+    // Extract links regardless of whether an article was parsed, as links might be on non-article pages too.
+    const discoveredLinks = extractLinksFromHtml(doc, url);
+
     if (article) {
-      console.log(`Successfully extracted content: "${article.title}" for URL: ${url}`);
+      console.log(`Successfully extracted article: "${article.title}" for URL: ${url}. Found ${discoveredLinks.length} links.`);
       return {
         title: article.title,
-        content: article.textContent || '', // Ensure textContent is not null
-        htmlContent: article.content, // article.content is the simplified HTML
+        content: article.textContent || '',
+        htmlContent: article.content,
         excerpt: article.excerpt,
         byline: article.byline,
         dir: article.dir,
         length: article.length,
+        discoveredLinks: discoveredLinks,
       };
     } else {
-      console.warn(`Readability could not parse article content from URL: ${url}.`);
-      return null;
+      console.warn(`Readability could not parse article content from URL: ${url}. Still returning ${discoveredLinks.length} discovered links.`);
+      // Even if no "article" is found, we might have found links on the page.
+      // Return a minimal ExtractedArticle structure with links.
+      // Title could be from <title> tag if available, JSDOM provides doc.window.document.title
+      return {
+        title: doc.window.document.title || 'Title not found', // Fallback title
+        content: '', // No article text content
+        htmlContent: '', // No article HTML content
+        discoveredLinks: discoveredLinks,
+        // Other fields can be undefined or have default values
+      };
     }
   } catch (error: any) {
-    console.error(`Error during Readability content extraction for ${url}: ${error.message}`);
-    return null;
+    console.error(`Error during content/link extraction for ${url}: ${error.message}`);
+    return null; // On critical error during JSDOM parsing or Readability, return null overall
   }
 }
 
 // Interface for the object returned by fetchWebContent
+// No change needed here if ExtractedArticle (part of extractedArticle field) now contains discoveredLinks.
 interface WebContentFetchResult {
   url: string;
   rawHtmlContent: string | null;
@@ -514,7 +568,9 @@ async function storeResultsInSupabase(supabaseClient: SupabaseClient, processedD
  */
 async function runAgent() {
   console.log(`Content Curator Agent started running at: ${new Date().toISOString()}`);
+  const globallyProcessedOrQueuedUrlsInThisRun = new Set<string>(); // Tracks all URLs processed or queued in this entire agent run
   let supabaseClient;
+
   try {
     supabaseClient = await initializeSupabaseClient();
   } catch (error: any) {
@@ -546,198 +602,274 @@ async function runAgent() {
   // Overall try-catch for the strategy processing loop
   try {
     for (const strategy of strategies) {
-    console.log(`\nProcessing strategy: Keywords - ${(strategy.keywords || []).join(', ')}, Sites: ${(strategy.targetSites || []).join(', ')}`);
-    
-    // This part needs to be more sophisticated.
-    // For each strategy, it should iterate `targetSites`.
-    // For each `targetSite`, it might need to scrape that site to find individual article URLs.
-    // Or, if `targetSites` are RSS feeds, parse them.
-    // Or, use `keywords` to search via a search engine API (if available/configured).
-    
-    // Simplified loop: process each targetSite URL as if it's a direct article URL.
-    for (const siteUrl of (strategy.targetSites || [])) {
-      console.log(`\n---\nProcessing target site/URL: ${siteUrl}`);
-      const articleUrlToProcess = siteUrl; // In this simplified version.
+      console.log(`\nProcessing strategy: Keywords - ${(strategy.keywords || []).join(', ')}, Initial Sites: ${(strategy.targetSites || []).join(', ')}`);
+      const baseStrategyKeywords = strategy.keywords || ['untagged'];
 
-      const isDuplicate = await checkForDuplicates(supabaseClient, articleUrlToProcess);
-      if (isDuplicate) {
-        console.log(`Skipping already processed URL: ${articleUrlToProcess}`);
-        continue;
-      }
+      for (const initialSiteUrl of (strategy.targetSites || [])) {
+        // Queue items will now be objects to carry discovery context
+        const urlsToProcess: { url: string; isDiscovered: boolean; originalStrategyKeywords: string[]; }[] = [
+          { url: initialSiteUrl, isDiscovered: false, originalStrategyKeywords: baseStrategyKeywords }
+        ];
+        let discoveredLinksProcessedCountForInitialSite = 0;
+        let initialSiteHostname: string | undefined;
+        try {
+          initialSiteHostname = new URL(initialSiteUrl).hostname;
+        } catch (e: any) {
+          console.error(`Invalid initialSiteUrl ${initialSiteUrl}: ${e.message}. Skipping this initial site.`);
+          await sendNotification(
+            `Agent Error: Invalid Initial Site URL`,
+            `The URL "${initialSiteUrl}" from a strategy is invalid and cannot be processed. Error: ${e.message}`,
+            true
+          );
+          continue;
+        }
 
-      // Agent generates a unique ID for this processing attempt.
-      // This ID could be passed to the API and then used by the ProcessedContent object.
-      const processingId = `agent-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
-      // Agent generates a unique ID for this processing attempt.
-      const processingId = `agent-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+        let iterationCount = 0;
+        const MAX_ITERATIONS_PER_INITIAL_SITE = 100;
 
-      // --- Step 1: Create Initial Record in Supabase ---
-      // This ensures a record exists to be updated throughout the process.
-      const initialRecord: Partial<ProcessedContent> & { source_url: string; status: string; agent_id?: string; } = {
-        source_url: articleUrlToProcess,
-        title: `Processing: ${articleUrlToProcess}`, // Temporary title
-        summary: 'Agent processing started.',
-        tags: strategy.keywords || ['untagged'],
-        status: STATUS.PROCESSING_STARTED,
-        agent_progress_message: 'Agent picked up URL for processing.',
-        agent_id: processingId, // Store the agent's internal ID for this job
-        // imageStatus: 'none', // Set defaults if your table requires them
-      };
-      // Use storeResultsInSupabase to insert this initial record.
-      // We'll need to modify storeResultsInSupabase to handle this minimal ProcessedContent.
-      // For now, let's assume storeResultsInSupabase is adapted or we use a direct insert.
-      try {
-        const { error: insertError } = await supabaseClient
-          .from('curated_content')
-          .insert([initialRecord])
-          .select(); // select is optional here unless we need the inserted data immediately
-        if (insertError) {
-            console.error(`Critical Error: Failed to insert initial record for ${articleUrlToProcess}: ${insertError.message}. Skipping this URL.`);
-            // If 23505 (unique_violation), it means checkForDuplicates failed or there's a race condition.
-            // This shouldn't happen if checkForDuplicates is reliable.
-            if (insertError.code === '23505') {
-                 console.error(`Unique constraint violation for ${articleUrlToProcess} during initial insert. This URL may have been processed by another instance or duplicate check failed.`);
+        while (urlsToProcess.length > 0 && iterationCount < MAX_ITERATIONS_PER_INITIAL_SITE) {
+          iterationCount++;
+          const currentUrlObject = urlsToProcess.shift(); // Now an object
+          if (!currentUrlObject) continue;
+
+          const { url: currentUrlToProcess, isDiscovered, originalStrategyKeywords } = currentUrlObject;
+
+          console.log(`\n---\nAttempting to process URL: ${currentUrlToProcess} (Origin: ${initialSiteUrl}, Discovered: ${isDiscovered})`);
+
+          // Check if URL was already processed or queued in this entire agent run
+          // Allow initialSiteUrl to proceed if it's its first appearance from this specific strategy's initialSiteUrl list
+          if (globallyProcessedOrQueuedUrlsInThisRun.has(currentUrlToProcess) && currentUrlToProcess !== initialSiteUrl) {
+             // This condition needs refinement: an initialSiteUrl for strategy B could have been a discovered link from strategy A.
+             // The key is that `globallyProcessedOrQueuedUrlsInThisRun` prevents any URL from being fully processed (fetch onwards) more than once per agent run.
+             // The initial check before this while loop for `initialSiteUrl` might need adjustment.
+             // For now: if it's in global, and it's not the very first one from THIS initialSiteUrl list, skip.
+             // This is complex. Let's simplify: if globally processed, only allow if it IS an initialSiteUrl just being introduced.
+             // The critical part is adding to globallyProcessedOrQueuedUrlsInThisRun *before* DB check.
+            if (currentUrlToProcess !== initialSiteUrl || (currentUrlToProcess === initialSiteUrl && isDiscovered)) { // isDiscovered helps if an initial site is re-queued as discovered
+                console.log(`Skipping ${currentUrlToProcess} as it's already processed or queued in this run from another path.`);
+                continue;
             }
-            continue; // Skip to next URL if initial record fails
+          }
+
+          globallyProcessedOrQueuedUrlsInThisRun.add(currentUrlToProcess);
+
+          const isDuplicateInDB = await checkForDuplicates(supabaseClient, currentUrlToProcess);
+          if (isDuplicateInDB) {
+            console.log(`Skipping ${currentUrlToProcess} as it's already processed in DB.`);
+            globallyProcessedOrQueuedUrlsInThisRun.add(currentUrlToProcess);
+            continue;
+          }
+
+          const processingId = `agent-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+
+          // --- Step 1: Create Initial Record in Supabase ---
+          let tagsForRecord = originalStrategyKeywords;
+          if (isDiscovered) {
+            tagsForRecord = [...new Set([...tagsForRecord, 'discovered'])]; // Add 'discovered' tag
+          }
+
+          const initialRecordData: Partial<ProcessedContent> & { source_url: string; status: string; agent_id?: string; } = {
+            source_url: currentUrlToProcess,
+            title: `Processing: ${currentUrlToProcess}`,
+            summary: 'Agent processing started.',
+            tags: tagsForRecord,
+            status: STATUS.PROCESSING_STARTED,
+            agent_progress_message: `Agent picked up URL for processing. Discovered: ${isDiscovered}.`,
+            agent_id: processingId,
+          };
+          try {
+            const { error: insertError } = await supabaseClient.from('curated_content').insert([initialRecordData]).select();
+            if (insertError) {
+              console.error(`Error inserting initial record for ${currentUrlToProcess}: ${insertError.message}.`);
+              if (insertError.code === '23505') console.error(`Unique constraint violation for ${currentUrlToProcess}.`);
+              globallyProcessedOrQueuedUrlsInThisRun.delete(currentUrlToProcess);
+              continue;
+            }
+            console.log(`Initial record created for ${isDiscovered ? 'discovered ' : ''}URL: ${currentUrlToProcess} with status ${STATUS.PROCESSING_STARTED}`);
+          } catch (e:any) {
+            console.error(`Unexpected error during initial record insertion for ${currentUrlToProcess}: ${e.message}.`);
+            globallyProcessedOrQueuedUrlsInThisRun.delete(currentUrlToProcess);
+            continue;
+          }
+
+          // --- Step 2: Fetch Web Content (with retries) ---
+          const webContentResult = await fetchWebContent(currentUrlToProcess);
+
+          if (webContentResult.robotsTxtDisallowed) {
+            console.log(`Skipping ${currentUrlToProcess} as fetching is disallowed by robots.txt.`);
+            await updateSupabaseRecord(supabaseClient, currentUrlToProcess, {
+              summary: 'Content fetching was disallowed by the website\'s robots.txt file.',
+              status: STATUS.SKIPPED_ROBOTS,
+              agent_error_message: 'robots.txt disallows fetching for user agent ' + OUR_USER_AGENT,
+              agent_progress_message: 'Skipped due to robots.txt.',
+            });
+            continue;
+          }
+
+          if (webContentResult.error || !webContentResult.rawHtmlContent) {
+            console.warn(`Could not fetch content or content was empty for ${currentUrlToProcess}. Error: ${webContentResult.error || 'No raw HTML content'}.`);
+            await updateSupabaseRecord(supabaseClient, currentUrlToProcess, {
+              summary: webContentResult.error || 'No raw HTML content was obtained. AI processing cannot proceed.',
+              status: STATUS.ERROR_FETCHING,
+              agent_error_message: webContentResult.error || 'Raw HTML content is null or empty.',
+              agent_progress_message: 'Content fetching failed or returned empty.',
+            });
+            continue;
+          }
+
+          await updateSupabaseRecord(supabaseClient, currentUrlToProcess, {
+            status: STATUS.CONTENT_FETCHED,
+            agent_progress_message: `Successfully fetched raw HTML. Length: ${webContentResult.rawHtmlContent.length}.`,
+            agent_error_message: null,
+          });
+
+          // --- Step 3 (was 4): Extract Main Content & Prepare for Link Discovery ---
+          let discoveredLinksOnPage: string[] = [];
+          if (webContentResult.extractedArticle) {
+            discoveredLinksOnPage = webContentResult.extractedArticle.discoveredLinks || [];
+            console.log(`Successfully extracted main content for ${currentUrlToProcess}. Title: "${webContentResult.extractedArticle.title}". Found ${discoveredLinksOnPage.length} links.`);
+            await updateSupabaseRecord(supabaseClient, currentUrlToProcess, {
+              title: webContentResult.extractedArticle.title,
+              status: STATUS.CONTENT_EXTRACTED,
+              agent_progress_message: `Main content extracted. Title: "${webContentResult.extractedArticle.title}". Links found: ${discoveredLinksOnPage.length}.`,
+            });
+          } else {
+            console.warn(`ExtractedArticle object is null for ${currentUrlToProcess}, though rawHTML was present. This indicates a severe extraction issue.`);
+            await updateSupabaseRecord(supabaseClient, currentUrlToProcess, {
+              status: STATUS.ERROR_EXTRACTION,
+              agent_progress_message: 'Critical error during content extraction phase (JSDOM/Readability setup or severe parsing error). No content or links extracted.',
+              agent_error_message: 'ExtractedArticle object was null after successful HTML fetch.',
+            });
+            discoveredLinksOnPage = [];
+          }
+
+          // --- Step 4 (was 4.5): Process Discovered Links ---
+          // Only process discovered links if this currentUrlToProcess is the initial site for this discovery branch,
+          // OR if we haven't hit the link processing limit for this branch yet.
+          const canProcessMoreLinksFromThisBranch = discoveredLinksProcessedCountForInitialSite < MAX_DISCOVERED_LINKS_PER_STRATEGY_SITE;
+
+          if (discoveredLinksOnPage.length > 0 && canProcessMoreLinksFromThisBranch) {
+            console.log(`Processing up to ${MAX_DISCOVERED_LINKS_PER_STRATEGY_SITE - discoveredLinksProcessedCountForInitialSite} discovered links from ${currentUrlToProcess} (Origin: ${initialSiteUrl})`);
+            for (const discoveredLink of discoveredLinksOnPage) {
+              if (discoveredLinksProcessedCountForInitialSite >= MAX_DISCOVERED_LINKS_PER_STRATEGY_SITE) {
+                console.log(`Reached max discovered links (${MAX_DISCOVERED_LINKS_PER_STRATEGY_SITE}) for origin ${initialSiteUrl}. No more links will be queued from this page (${currentUrlToProcess}).`);
+                break;
+              }
+
+              let discoveredLinkHostname: string | undefined;
+              try {
+                discoveredLinkHostname = new URL(discoveredLink).hostname;
+              } catch (e: any) {
+                console.warn(`Invalid discovered URL ${discoveredLink}: ${e.message}. Skipping.`);
+                continue;
+              }
+
+              if (STAY_ON_SAME_DOMAIN && discoveredLinkHostname !== initialSiteHostname) {
+                console.log(`Skipping link (different domain): ${discoveredLink} (origin host: ${initialSiteHostname}, link host: ${discoveredLinkHostname})`);
+                continue;
+              }
+
+              if (globallyProcessedOrQueuedUrlsInThisRun.has(discoveredLink)) {
+                console.log(`Skipping link (already processed/queued globally in this run): ${discoveredLink}`);
+                continue;
+              }
+
+              const isDiscDuplicateInDB = await checkForDuplicates(supabaseClient, discoveredLink);
+              if (isDiscDuplicateInDB) {
+                console.log(`Skipping discovered link (already in DB): ${discoveredLink}`);
+                globallyProcessedOrQueuedUrlsInThisRun.add(discoveredLink);
+                continue;
+              }
+
+              console.log(`Queueing discovered link: ${discoveredLink} (Origin: ${initialSiteUrl}, Original Keywords: ${originalStrategyKeywords.join(', ')})`);
+              urlsToProcess.push({ url: discoveredLink, isDiscovered: true, originalStrategyKeywords }); // Pass original keywords
+              globallyProcessedOrQueuedUrlsInThisRun.add(discoveredLink);
+              // Increment count only for links that are NOT the initial strategy site itself being re-processed through discovery.
+              // And only if this current URL is not the initial site.
+              // This logic is tricky: we want to limit links *discovered from* the initial site and its children.
+              // The count should apply to the branch originating from `initialSiteUrl`.
+              discoveredLinksProcessedCountForInitialSite++;
+            }
+          } else if (discoveredLinksOnPage.length > 0 && !canProcessMoreLinksFromThisBranch) {
+             console.log(`Limit for discovered links from origin ${initialSiteUrl} already met. No new links from ${currentUrlToProcess} will be queued.`);
+          }
+
+
+          // --- Step 5: Trigger AI Processing ---
+          if (!webContentResult.extractedArticle?.content && !webContentResult.rawHtmlContent) {
+             console.warn(`Skipping AI processing for ${currentUrlToProcess} as there is no content.`);
+             await updateSupabaseRecord(supabaseClient, currentUrlToProcess, {
+                status: STATUS.ERROR_EXTRACTION,
+                agent_progress_message: 'No meaningful content found to send to AI.',
+             });
+             continue;
+          }
+          if (!webContentResult.extractedArticle?.content && webContentResult.extractedArticle?.title === 'Title not found') {
+            console.warn(`Skipping AI processing for ${currentUrlToProcess} as main article content extraction failed, only got links/default title.`);
+            await updateSupabaseRecord(supabaseClient, currentUrlToProcess, {
+                status: STATUS.ERROR_EXTRACTION,
+                agent_progress_message: 'Main article content not extracted by Readability; skipping AI processing.',
+            });
+            continue;
+          }
+
+
+          await updateSupabaseRecord(supabaseClient, currentUrlToProcess, {
+            status: STATUS.AI_PROCESSING_INITIATED,
+            agent_progress_message: `Content ready. Initiating AI processing. Extracted title: ${webContentResult.extractedArticle?.title || 'N/A'}.`,
+            agent_error_message: null,
+          });
+
+          const processedContent = await triggerAIProcessing(
+            processingId,
+            currentUrlToProcess,
+            originalStrategyKeywords.join(', ') // Use original keywords for AI processing
+          );
+
+          if (processedContent) {
+            let finalStatus = STATUS.COMPLETED;
+            let finalErrorMessage = processedContent.errorMessage;
+            let finalProgressMessage = processedContent.progressMessage;
+
+            if (processedContent.status === 'error') {
+                finalStatus = STATUS.AI_PROCESSING_FAILED;
+                console.warn(`AI Processing for ${currentUrlToProcess} resulted in an error: ${finalErrorMessage || finalProgressMessage}`);
+            } else if (processedContent.status === 'processed') {
+                finalStatus = STATUS.AI_PROCESSING_SUCCESSFUL;
+                 console.log(`Successfully processed content for URL: ${currentUrlToProcess}, Title: ${processedContent.title}`);
+            } else {
+                console.log(`AI processing for ${currentUrlToProcess} resulted in status: ${processedContent.status}. Message: ${finalProgressMessage}`);
+            }
+            const updatePayloadFromAI: Partial<ProcessedContent> & { status: string; agent_progress_message?: string | null; agent_error_message?: string | null; } = {
+                title: processedContent.title, summary: processedContent.summary, tags: processedContent.tags,
+                status: finalStatus, agent_progress_message: finalProgressMessage || "AI processing completed.", agent_error_message: finalErrorMessage,
+                image_url: processedContent.imageUrl, image_status: processedContent.imageStatus,
+                image_ai_hint: processedContent.imageAiHint, image_error_message: processedContent.imageErrorMessage,
+            };
+            await updateSupabaseRecord(supabaseClient, currentUrlToProcess, updatePayloadFromAI);
+          } else {
+            console.error(`Failed to get any response from AI processing trigger for URL: ${currentUrlToProcess}.`);
+            await updateSupabaseRecord(supabaseClient, currentUrlToProcess, {
+                status: STATUS.AI_PROCESSING_FAILED,
+                agent_progress_message: 'Agent failed to trigger or get a valid response from the AI processing API.',
+                agent_error_message: 'No processed content object returned from triggerAIProcessing call.',
+            });
+          }
+          console.log(`--- Finished processing ${currentUrlToProcess} ---`);
+        } // End while urlsToProcess
+        if(iterationCount >= MAX_ITERATIONS_PER_INITIAL_SITE) {
+            console.warn(`Max iterations (${MAX_ITERATIONS_PER_INITIAL_SITE}) reached for initial site ${initialSiteUrl}. Moving to next initial site or strategy.`);
+            await sendNotification(
+                `Agent Warning: Max Iterations Reached for Site`,
+                `Processing for initial site ${initialSiteUrl} and its discovered links reached the maximum iteration limit (${MAX_ITERATIONS_PER_INITIAL_SITE}). This might indicate a loop or very deep crawl.`,
+                false
+            );
         }
-        console.log(`Initial record created for ${articleUrlToProcess} with status ${STATUS.PROCESSING_STARTED}`);
-      } catch (e:any) {
-        console.error(`Unexpected critical error during initial record insertion for ${articleUrlToProcess}: ${e.message}. Skipping this URL.`);
-        continue;
-      }
-
-      // --- Step 2: Fetch Web Content (with retries) ---
-      const webContentResult = await fetchWebContent(articleUrlToProcess);
-
-      if (webContentResult.robotsTxtDisallowed) {
-        console.log(`Skipping ${articleUrlToProcess} as fetching is disallowed by robots.txt.`);
-        await updateSupabaseRecord(supabaseClient, articleUrlToProcess, {
-            // title: `Skipped (robots.txt): ${articleUrlToProcess}`, // Keep initial title or update?
-            summary: 'Content fetching was disallowed by the website\'s robots.txt file.',
-            status: STATUS.SKIPPED_ROBOTS,
-            agent_error_message: 'robots.txt disallows fetching for user agent ' + OUR_USER_AGENT,
-            agent_progress_message: 'Skipped due to robots.txt.',
-        });
-        continue;
-      }
-
-      if (webContentResult.error || !webContentResult.rawHtmlContent) {
-        console.warn(`Could not fetch content or content was empty for ${articleUrlToProcess}. Error: ${webContentResult.error || 'No raw HTML content'}.`);
-        await updateSupabaseRecord(supabaseClient, articleUrlToProcess, {
-            // title: `Fetch Error: ${articleUrlToProcess}`,
-            summary: webContentResult.error || 'No raw HTML content was obtained. AI processing cannot proceed.',
-            status: STATUS.ERROR_FETCHING,
-            agent_error_message: webContentResult.error || 'Raw HTML content is null or empty.',
-            agent_progress_message: 'Content fetching failed or returned empty.',
-        });
-        continue;
-      }
-
-      // --- Step 3: Content Fetched, Update Status ---
-      await updateSupabaseRecord(supabaseClient, articleUrlToProcess, {
-        status: STATUS.CONTENT_FETCHED,
-        agent_progress_message: `Successfully fetched raw HTML. Length: ${webContentResult.rawHtmlContent.length}.`,
-        agent_error_message: null, // Clear any previous fetch error if retries were involved but ultimately succeeded
-      });
-
-      // --- Step 4: Extract Main Content ---
-      // `extractMainContent` is called within `fetchWebContent` and its result is in `webContentResult.extractedArticle`
-      // We just need to update the status based on `webContentResult.extractedArticle`
-      if (webContentResult.extractedArticle) {
-        console.log(`Successfully extracted main content for ${articleUrlToProcess}. Title: "${webContentResult.extractedArticle.title}".`);
-        await updateSupabaseRecord(supabaseClient, articleUrlToProcess, {
-          title: webContentResult.extractedArticle.title, // Update title with extracted one
-          status: STATUS.CONTENT_EXTRACTED,
-          agent_progress_message: `Main content extracted. Title: "${webContentResult.extractedArticle.title}". Text length: ${webContentResult.extractedArticle.content.length}.`,
-          // Optionally store extracted_text_content, extracted_html_content if DB schema supports it
-        });
-      } else {
-        console.log(`Main content extraction by Readability failed or yielded no article for ${articleUrlToProcess}.`);
-        await updateSupabaseRecord(supabaseClient, articleUrlToProcess, {
-          status: STATUS.ERROR_EXTRACTION,
-          agent_progress_message: 'Readability failed to extract main content. AI will process raw HTML.',
-          // Do not clear title, keep the one from fetch or initial record.
-        });
-      }
-
-      // --- Step 5: Trigger AI Processing ---
-      await updateSupabaseRecord(supabaseClient, articleUrlToProcess, {
-        status: STATUS.AI_PROCESSING_INITIATED,
-        // Keep existing title (either from extraction or initial)
-        agent_progress_message: `Content ready. Initiating AI processing. Extracted title: ${webContentResult.extractedArticle?.title || 'N/A'}.`,
-        agent_error_message: null,
-      });
-
-      const processedContent = await triggerAIProcessing(
-        processingId,
-        articleUrlToProcess,
-        (strategy.keywords || ['General']).join(', ')
-        // Future enhancement: pass webContentResult.rawHtmlContent or webContentResult.extractedArticle.content
-      );
-      
-      if (processedContent) {
-        // Update Supabase with the final result from AI processing
-        // The `processedContent` object from `triggerAIProcessing` already has status, errorMessage, progressMessage
-        // We just need to ensure they are correctly mapped and stored.
-        // `triggerAIProcessing` should ideally use the STATUS constants for its internal `status` field if it implies final state.
-        // For now, we assume `processedContent.status` might be 'error' or 'processed'.
-
-        let finalStatus = STATUS.COMPLETED; // Default to completed if AI processing was successful
-        let finalErrorMessage = processedContent.errorMessage;
-        let finalProgressMessage = processedContent.progressMessage;
-
-        if (processedContent.status === 'error') { // Assuming 'error' is a status AI process might return
-            finalStatus = STATUS.AI_PROCESSING_FAILED;
-            console.warn(`AI Processing for ${articleUrlToProcess} resulted in an error: ${finalErrorMessage || finalProgressMessage}`);
-        } else if (processedContent.status === 'processed') { // Assuming 'processed' is a success status from AI
-            finalStatus = STATUS.AI_PROCESSING_SUCCESSFUL; // Or simply COMPLETED
-             console.log(`Successfully processed content for URL: ${articleUrlToProcess}, Title: ${processedContent.title}`);
-        } else {
-            // Handle other statuses from AI if necessary, or treat as unexpected
-            console.log(`AI processing for ${articleUrlToProcess} resulted in status: ${processedContent.status}. Message: ${finalProgressMessage}`);
-            // Potentially map to a specific agent status or keep the AI's status if it's informative
-        }
-
-        // Merge AI results with any existing data if needed, then store.
-        // The current storeResultsInSupabase inserts a new record. We need to update existing.
-        // Let's assume processedContent contains all necessary fields (title, summary, tags) from AI.
-        // Also, include other fields that the AI process might return as per ProcessedContent definition.
-        const updatePayloadFromAI: Partial<ProcessedContent> & { status: string; agent_progress_message?: string | null; agent_error_message?: string | null; } = {
-            title: processedContent.title,
-            summary: processedContent.summary,
-            tags: processedContent.tags,
-            status: finalStatus,
-            agent_progress_message: finalProgressMessage || "AI processing completed.",
-            agent_error_message: finalErrorMessage,
-            // Include other fields from ProcessedContent that AI might populate:
-            image_url: processedContent.imageUrl,
-            image_status: processedContent.imageStatus,
-            image_ai_hint: processedContent.imageAiHint,
-            image_error_message: processedContent.imageErrorMessage,
-            // raw_web_content: processedData.raw_web_content, // Usually not stored or updated at this stage
-            // extracted_text_content: processedData.extracted_text_content,
-            // extracted_html_content: processedData.extracted_html_content,
-            // extracted_title: processedData.extracted_title,
-            // Ensure any other relevant fields from ProcessedContent are included here
-        };
-        await updateSupabaseRecord(supabaseClient, articleUrlToProcess, updatePayloadFromAI);
-
-      } else {
-        // This case means triggerAIProcessing itself failed catastrophically (e.g., network error calling the API)
-        // or returned null, which our current triggerAIProcessing does for such errors.
-        console.error(`Failed to get any response from AI processing trigger for URL: ${articleUrlToProcess}.`);
-        await updateSupabaseRecord(supabaseClient, articleUrlToProcess, {
-            status: STATUS.AI_PROCESSING_FAILED,
-            agent_progress_message: 'Agent failed to trigger or get a valid response from the AI processing API.',
-            agent_error_message: 'No processed content object returned from triggerAIProcessing call.',
-        });
-      }
-      console.log(`---`);
-    }
-  }
-
-  console.log(`Content Curator Agent finished at: ${new Date().toISOString()}`);
+      } // End for initialSiteUrl
+    } // End for strategy
+  } catch (mainLoopError: any) {
+    console.error('[AGENT RUN] Critical error during main strategy processing loop:', mainLoopError);
   } catch (mainLoopError: any) {
     console.error('[AGENT RUN] Critical error during main strategy processing loop:', mainLoopError);
     await sendNotification(
