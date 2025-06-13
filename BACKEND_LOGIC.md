@@ -45,6 +45,8 @@ The agent's behavior is configured through environment variables and internal co
     *   `API_CALL_TIMEOUT_MS`: Timeout for each individual API call attempt (Default: 20000ms).
 *   **Heartbeat Configuration:**
     *   `HEARTBEAT_TIMEOUT_MS`: Timeout in milliseconds for the Uptime Kuma heartbeat ping (Default: 5000ms).
+*   **Sitemap Processing Configuration:**
+    *   `SITEMAP_TIMEOUT_MS`: Timeout in milliseconds for fetching individual sitemap files (Default: 15000ms).
 *   **User Agent:**
     *   `OUR_USER_AGENT`: The user agent string the agent uses for HTTP requests (e.g., `ContentCuratorBot/1.0 (+http://yourprojecturl.com/botinfo)`).
 *   **Link Discovery Configuration:**
@@ -65,15 +67,17 @@ The `runAgent` function orchestrates the entire content curation process:
     *   If no strategies are found, a warning notification is sent, and the agent exits.
     *   Initializes a global set `globallyProcessedOrQueuedUrlsInThisRun` to track all URLs encountered during the current agent run to prevent redundant processing.
 
-3.  **Iterate Through Strategies and Process URL Queue:**
+3.  **Iterate Through Strategies and Initialize URL Processing Branches:**
     *   The agent loops through each `strategy`.
     *   For each `strategy`, it then iterates through each `initialSiteUrl` listed in `strategy.targetSites`.
-    *   A processing queue (`urlsToProcess`) is initialized for each `initialSiteUrl`, starting with the `initialSiteUrl` itself with `depth: 0`. Each item in this queue is an object: `{ url: string; isDiscovered: boolean; originalStrategyKeywords: string[]; depth: number; }`.
-    *   A `while` loop continues as long as there are URLs in `urlsToProcess` (and safety iteration limits are not met).
+    *   **Sitemap Discovery for Base URLs:** If an `initialSiteUrl` is identified as a base URL (e.g., `http://example.com`), the agent calls `fetchUrlsFromSitemap(initialSiteUrl)`. This function attempts to find sitemap URLs from `robots.txt` and the common `/sitemap.xml` path, then fetches and parses these sitemaps using the `sitemapper` library.
+    *   **Seed URL Collection:** URLs obtained from sitemaps (after being checked against `globallyProcessedOrQueuedUrlsInThisRun` and for duplicates in Supabase) are considered primary targets (`depth: 0`, `isDiscovered: false`) for this strategy branch and collected into `seedUrlsForThisBranch`. If no valid, new URLs are found via sitemaps for a base URL, or if the `initialSiteUrl` was not a base URL, the `initialSiteUrl` itself is added as a primary target to `seedUrlsForThisBranch` (after the same global and Supabase duplicate checks).
+    *   The `urlsToProcess` queue for the current branch is then initialized with these `seedUrlsForThisBranch`. Each item in the queue is an object: `{ url: string; isDiscovered: boolean; originalStrategyKeywords: string[]; depth: number; }`.
+    *   A `while` loop then processes URLs from this queue (and any subsequently discovered links) until the queue is empty or safety iteration limits are met.
 
 4.  **Process Each URL from the Queue (`currentUrlToProcess`):**
-    *   **Global Run Check:** The URL is first checked against `globallyProcessedOrQueuedUrlsInThisRun`. If already present (and not an `initialSiteUrl` being processed for the first time in its specific strategy context), it's skipped. Otherwise, it's added to this global set.
-    *   **Supabase Duplicate Check:** Calls `checkForDuplicates()` to see if the URL already exists in the `curated_content` table (i.e., processed in a *previous* agent run). If so, it's skipped.
+    *   **Global Run Check (Dequeue Time):** The URL is dequeued. It's added to `globallyProcessedOrQueuedUrlsInThisRun` at this point to ensure it's marked as "globally seen for processing" for the current run. The primary de-duplication against this set for *queueing* discovered links happens before they are added to `urlsToProcess`.
+    *   **Initial Record Creation:** (Assuming it passed pre-queueing duplicate checks against Supabase if it was a seed URL). An initial record is inserted into `curated_content`.
     *   **Initial Record Creation:** If not a duplicate, an initial record is inserted into `curated_content`.
         *   The `status` is set to `STATUS.PROCESSING_STARTED`.
         *   If the URL `isDiscovered`, a `'discovered'` tag is added to the `originalStrategyKeywords` inherited from its originating strategy.
@@ -140,6 +144,7 @@ This discovery mechanism, now with depth control, allows the agent to expand its
 
 *   **`initializeSupabaseClient()`**: Initializes and returns the Supabase client instance using environment variables. Exits on failure.
 *   **`fetchStrategiesFromSupabase(client)`**: Fetches content curation strategies from the `search_strategies` table in Supabase. Returns a default strategy if none are found or on error.
+*   **`fetchUrlsFromSitemap(baseUrl)`**: Fetches and parses sitemap files (from `robots.txt` or default `/sitemap.xml`) for a given base URL using the `sitemapper` library, returning a list of unique page URLs after basic validation.
 *   **`getRobotsTxtUrl(websiteUrl)`**: Constructs the full URL for a website's `robots.txt` file.
 *   **`extractLinksFromHtml(dom, baseUrl)`**: (Internal helper) Extracts, resolves, and filters hyperlinks from a JSDOM object.
 *   **`extractMainContent(htmlContent, url)`**: Uses `JSDOM` to parse HTML. It then uses `@mozilla/readability` to extract the main article content and calls `extractLinksFromHtml` to discover hyperlinks from the page. Returns an `ExtractedArticle` object (which includes `discoveredLinks`) or `null` on critical parsing errors. It attempts to return a minimal object with links even if full article extraction fails.

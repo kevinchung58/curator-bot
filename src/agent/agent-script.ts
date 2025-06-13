@@ -45,6 +45,9 @@ const API_CALL_TIMEOUT_MS = 20000; // Timeout for each API call attempt
 // Configuration for Uptime Kuma Heartbeat
 const HEARTBEAT_TIMEOUT_MS = 5000; // 5 seconds
 
+// Sitemap processing configuration
+const SITEMAP_TIMEOUT_MS = 15000; // Timeout for fetching individual sitemap files
+
 
 // Statuses for curated_content table
 const STATUS = {
@@ -154,6 +157,99 @@ interface ExtractedArticle {
   length?: number;
   discoveredLinks: string[]; // Added for new requirement
 }
+
+/**
+ * Fetches URLs from sitemaps listed in robots.txt or common sitemap paths for a given base URL.
+ * @param baseUrl The base URL of the website (e.g., https://example.com).
+ * @returns A promise that resolves to an array of unique URLs found in the sitemaps.
+ */
+async function fetchUrlsFromSitemap(baseUrl: string): Promise<string[]> {
+  const sitemapPaths = new Set<string>();
+  const uniqueUrlsFromSitemaps = new Set<string>();
+
+  // 1. Try to find sitemap URLs from robots.txt
+  const robotsUrl = getRobotsTxtUrl(baseUrl);
+  console.log(`Fetching robots.txt for sitemap discovery: ${robotsUrl}`);
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS); // Use existing fetch timeout
+    const response = await fetch(robotsUrl, { headers: { 'User-Agent': OUR_USER_AGENT }, signal: controller.signal });
+    clearTimeout(timeoutId);
+
+    if (response.ok) {
+      const robotsTxtContent = await response.text();
+      robotsTxtContent.split('\n').forEach(line => {
+        const trimmedLine = line.trim();
+        if (trimmedLine.toLowerCase().startsWith('sitemap:')) {
+          const sitemapPath = trimmedLine.substring('sitemap:'.length).trim();
+          try {
+            // Ensure it's a full URL, or resolve it against baseUrl if it's relative (though less common for sitemap directive)
+            const sitemapFullUrl = new URL(sitemapPath, baseUrl).href;
+            sitemapPaths.add(sitemapFullUrl);
+            console.log(`Found sitemap in robots.txt: ${sitemapFullUrl}`);
+          } catch (e) {
+            console.warn(`Invalid sitemap URL found in robots.txt "${sitemapPath}": ${(e as Error).message}`);
+          }
+        }
+      });
+    } else {
+      console.warn(`Failed to fetch robots.txt for sitemap discovery from ${robotsUrl}: ${response.status}`);
+    }
+  } catch (error: any) {
+    if (error.name === 'AbortError') {
+      console.warn(`Timeout fetching robots.txt for sitemap discovery from ${robotsUrl}`);
+    } else {
+      console.warn(`Error fetching robots.txt for sitemap discovery from ${robotsUrl}: ${error.message}`);
+    }
+  }
+
+  // 2. Add default sitemap.xml path
+  try {
+    sitemapPaths.add(new URL('/sitemap.xml', baseUrl).href);
+  } catch (e) {
+      console.error(`Error constructing default sitemap path for ${baseUrl}: ${(e as Error).message}`);
+  }
+
+
+  // 3. Process each identified sitemap path
+  for (const sitemapFullPath of Array.from(sitemapPaths)) { // Convert Set to Array for async iteration
+    console.log(`Attempting to fetch and parse sitemap: ${sitemapFullPath}`);
+    const sitemapper = new Sitemapper({
+      url: sitemapFullPath,
+      timeout: SITEMAP_TIMEOUT_MS, // Specific timeout for sitemap fetching
+      // Other Sitemapper options if needed, like `requestHeaders`
+      // requestHeaders: { 'User-Agent': OUR_USER_AGENT } // Sitemapper might have its own way or use it by default
+    });
+
+    try {
+      const { sites, errors } = await sitemapper.fetch();
+      sites.forEach(site => {
+        try {
+            // Validate URL structure before adding
+            const urlObj = new URL(site);
+            if (urlObj.protocol === 'http:' || urlObj.protocol === 'https:') {
+                 uniqueUrlsFromSitemaps.add(site);
+            } else {
+                // console.warn(`Skipping sitemap URL with non-http(s) protocol: ${site}`);
+            }
+        } catch(e) {
+            // console.warn(`Skipping invalid URL from sitemap ${sitemapFullPath}: ${site}`);
+        }
+      });
+      if (sites.length > 0) {
+        console.log(`Found ${sites.length} URLs in ${sitemapFullPath}. Total unique URLs so far: ${uniqueUrlsFromSitemaps.size}`);
+      }
+      if (errors && errors.length > 0) {
+          errors.forEach(err => console.warn(`Sitemapper error for ${sitemapFullPath} (URL: ${err.url}, Type: ${err.type}): ${err.message || err.error?.message}`));
+      }
+    } catch (error: any) {
+      console.warn(`Error fetching/parsing sitemap ${sitemapFullPath}: ${error.message}`);
+    }
+  }
+
+  return Array.from(uniqueUrlsFromSitemaps);
+}
+
 
 /**
  * Initializes the Supabase client.
@@ -698,24 +794,84 @@ Current values (undefined means not set, sensitive fields are masked if present)
         const baseStrategyKeywords = strategy.keywords || ['untagged'];
 
         for (const initialSiteUrl of (strategy.targetSites || [])) {
-        // Queue items will now be objects to carry discovery context, including depth
-        const urlsToProcess: { url: string; isDiscovered: boolean; originalStrategyKeywords: string[]; depth: number; }[] = [
-          { url: initialSiteUrl, isDiscovered: false, originalStrategyKeywords: baseStrategyKeywords, depth: 0 }
-        ];
-        let discoveredLinksProcessedCountForInitialSite = 0;
-        let initialSiteHostname: string | undefined;
+        let seedUrlsForThisBranch: { url: string; isDiscovered: boolean; originalStrategyKeywords: string[]; depth: number; }[] = [];
+        let isBaseUrl = false;
+        let currentInitialSiteHostname: string | undefined; // To store the hostname of the valid initialSiteUrl
+
         try {
-          initialSiteHostname = new URL(initialSiteUrl).hostname;
+          const parsedUrl = new URL(initialSiteUrl);
+          currentInitialSiteHostname = parsedUrl.hostname; // Store for later use (e.g. STAY_ON_SAME_DOMAIN for discovered links)
+          if (parsedUrl.pathname === '/' || parsedUrl.pathname === '') {
+            isBaseUrl = true;
+          }
         } catch (e: any) {
-          console.error(`Invalid initialSiteUrl ${initialSiteUrl}: ${e.message}. Skipping this initial site.`);
-          await sendNotification(
-            `Agent Error: Invalid Initial Site URL`,
-            `The URL "${initialSiteUrl}" from a strategy is invalid and cannot be processed. Error: ${e.message}`,
-            true
-          );
-          continue;
+          console.error(`Invalid initialSiteUrl in strategy: ${initialSiteUrl} - ${e.message}. Skipping this initial site.`);
+          await sendNotification('Agent Error: Invalid Strategy URL', `Strategy URL "${initialSiteUrl}" from strategy (Keywords: ${baseStrategyKeywords.join(', ')}) is invalid and cannot be processed. Error: ${e.message}`, true);
+          continue; // Skip to next initialSiteUrl in the strategy
         }
 
+        if (isBaseUrl) {
+          console.log(`Processing ${initialSiteUrl} as a base URL, attempting sitemap discovery.`);
+          const sitemapUrls = await fetchUrlsFromSitemap(initialSiteUrl);
+          if (sitemapUrls.length > 0) {
+            console.log(`Found ${sitemapUrls.length} URLs from sitemap(s) for ${initialSiteUrl}. Adding valid new ones to queue.`);
+            for (const sitemapUrl of sitemapUrls) {
+              if (globallyProcessedOrQueuedUrlsInThisRun.has(sitemapUrl)) {
+                // console.log(`Sitemap URL ${sitemapUrl} already processed or queued in this run. Skipping.`);
+                continue;
+              }
+              if (await checkForDuplicates(supabaseClient, sitemapUrl)) {
+                // console.log(`Sitemap URL ${sitemapUrl} is a duplicate in Supabase. Skipping.`);
+                globallyProcessedOrQueuedUrlsInThisRun.add(sitemapUrl);
+                continue;
+              }
+              seedUrlsForThisBranch.push({
+                url: sitemapUrl,
+                isDiscovered: false,
+                originalStrategyKeywords: baseStrategyKeywords,
+                depth: 0
+              });
+              // No need to add to globallyProcessedOrQueuedUrlsInThisRun here, it's done when it's popped from urlsToProcess
+            }
+          }
+          // If no URLs from sitemap, add the initialSiteUrl itself, subject to checks.
+          if (seedUrlsForThisBranch.length === 0) {
+            console.log(`No valid, new URLs found via sitemap(s) for base URL ${initialSiteUrl}. Adding the base URL itself to queue if new.`);
+            if (!globallyProcessedOrQueuedUrlsInThisRun.has(initialSiteUrl)) {
+                if (!await checkForDuplicates(supabaseClient, initialSiteUrl)) {
+                    seedUrlsForThisBranch.push({ url: initialSiteUrl, isDiscovered: false, originalStrategyKeywords: baseStrategyKeywords, depth: 0 });
+                    // globallyProcessedOrQueuedUrlsInThisRun.add(initialSiteUrl); // Added when popped
+                } else {
+                    console.log(`Initial base URL ${initialSiteUrl} is a duplicate in DB. Not adding.`);
+                    globallyProcessedOrQueuedUrlsInThisRun.add(initialSiteUrl);
+                }
+            } else {
+                 console.log(`Initial base URL ${initialSiteUrl} already processed or queued in this run. Not adding.`);
+            }
+          }
+        } else {
+            console.log(`Processing ${initialSiteUrl} as a direct target URL (not a base URL for sitemap scan).`);
+             if (!globallyProcessedOrQueuedUrlsInThisRun.has(initialSiteUrl)) {
+                if (!await checkForDuplicates(supabaseClient, initialSiteUrl)) {
+                    seedUrlsForThisBranch.push({ url: initialSiteUrl, isDiscovered: false, originalStrategyKeywords: baseStrategyKeywords, depth: 0 });
+                    // globallyProcessedOrQueuedUrlsInThisRun.add(initialSiteUrl); // Added when popped
+                } else {
+                    console.log(`Initial direct URL ${initialSiteUrl} is a duplicate in DB. Not adding.`);
+                    globallyProcessedOrQueuedUrlsInThisRun.add(initialSiteUrl);
+                }
+            } else {
+                 console.log(`Initial direct URL ${initialSiteUrl} is already processed or queued in this run. Not adding.`);
+            }
+        }
+
+        const urlsToProcess = [...seedUrlsForThisBranch];
+        if (urlsToProcess.length === 0) {
+            console.log(`No new URLs to process for initial site branch: ${initialSiteUrl}.`);
+            continue;
+        }
+
+        let discoveredLinksProcessedCountForInitialSite = 0;
+        const initialSiteHostname = currentInitialSiteHostname; // Use the validated hostname from the try-catch block above
 
         let iterationCount = 0;
         const MAX_ITERATIONS_PER_INITIAL_SITE = 100;
@@ -729,7 +885,152 @@ Current values (undefined means not set, sensitive fields are masked if present)
 
           console.log(`\n---\nAttempting to process URL: ${currentUrlToProcess} (Origin: ${initialSiteUrl}, Discovered: ${isDiscovered}, Depth: ${currentDepth})`);
 
-          // Check if URL was already processed or queued in this entire agent run
+          // Moved global check to be the very first thing after dequeuing.
+          // If already seen globally, skip unless it's an initialSiteUrl that hasn't been processed yet from *this* strategy branch.
+          // This specific condition for initialSiteUrl might be tricky; the main defense is that items in urlsToProcess
+          // should generally not be in globallyProcessedOrQueuedUrlsInThisRun yet unless added by sitemap/direct target logic above.
+          if (globallyProcessedOrQueuedUrlsInThisRun.has(currentUrlToProcess)) {
+             // If it's an initialSiteUrl, it might have been added to global set if found in DB or by sitemap logic.
+             // If it's truly an initial site that passed those and is now in queue, it should proceed once.
+             // The problem is if it was a discovered link from *another* strategy branch that is also an initialSiteUrl here.
+             // The check `!globallyProcessedOrQueuedUrlsInThisRun.has(initialSiteUrl)` before adding initialSiteUrl to seedUrlsForThisBranch
+             // should largely prevent an initialSiteUrl from being processed if it was already globally processed.
+             console.log(`Skipping ${currentUrlToProcess} as it's already processed or queued globally in this run.`);
+             continue;
+          }
+          globallyProcessedOrQueuedUrlsInThisRun.add(currentUrlToProcess);
+
+
+          // Supabase Duplicate check was already done for URLs when they were added to seedUrlsForThisBranch.
+          // If a URL is in urlsToProcess, it means it was NOT a duplicate in Supabase at the time of adding.
+          // So, we can proceed directly to creating the initial record.
+          // const isDuplicateInDB = await checkForDuplicates(supabaseClient, currentUrlToProcess);
+          // if (isDuplicateInDB) {
+          //   console.log(`Skipping ${currentUrlToProcess} as it's already processed in DB (re-check).`);
+          //   globallyProcessedOrQueuedUrlsInThisRun.add(currentUrlToProcess);
+          //   continue;
+          // }
+
+
+          const processingId = `agent-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+
+          // --- Step 1: Create Initial Record in Supabase ---
+          let tagsForRecord = originalStrategyKeywords;
+          if (isDiscovered) {
+            tagsForRecord = [...new Set([...tagsForRecord, 'discovered'])]; // Add 'discovered' tag
+          }
+
+          const initialRecordData: Partial<ProcessedContent> & { source_url: string; status: string; agent_id?: string; } = {
+            source_url: currentUrlToProcess,
+            title: `Processing: ${currentUrlToProcess}`,
+            summary: 'Agent processing started.',
+            tags: tagsForRecord,
+            status: STATUS.PROCESSING_STARTED,
+            agent_progress_message: `Agent picked up URL for processing. Discovered: ${isDiscovered}. Depth: ${currentDepth}.`, // Added depth here
+            agent_id: processingId,
+          };
+          try {
+            const { error: insertError } = await supabaseClient.from('curated_content').insert([initialRecordData]).select();
+            if (insertError) {
+              console.error(`Error inserting initial record for ${currentUrlToProcess}: ${insertError.message}.`);
+              if (insertError.code === '23505') console.error(`Unique constraint violation for ${currentUrlToProcess}.`);
+              // If initial insert fails, we should not proceed with this URL.
+              // Remove from global set because it wasn't truly "processed" in terms of getting a DB record.
+              globallyProcessedOrQueuedUrlsInThisRun.delete(currentUrlToProcess);
+              continue;
+            }
+            console.log(`Initial record created for ${isDiscovered ? 'discovered ' : ''}URL: ${currentUrlToProcess} with status ${STATUS.PROCESSING_STARTED}`);
+          } catch (e:any) {
+            console.error(`Unexpected error during initial record insertion for ${currentUrlToProcess}: ${e.message}.`);
+            globallyProcessedOrQueuedUrlsInThisRun.delete(currentUrlToProcess);
+            continue;
+          }
+
+          // --- Step 2: Fetch Web Content (with retries) ---
+          const webContentResult = await fetchWebContent(currentUrlToProcess);
+
+          if (webContentResult.robotsTxtDisallowed) {
+            console.log(`Skipping ${currentUrlToProcess} as fetching is disallowed by robots.txt.`);
+            await updateSupabaseRecord(supabaseClient, currentUrlToProcess, {
+              summary: 'Content fetching was disallowed by the website\'s robots.txt file.',
+              status: STATUS.SKIPPED_ROBOTS,
+              agent_error_message: 'robots.txt disallows fetching for user agent ' + OUR_USER_AGENT,
+              agent_progress_message: 'Skipped due to robots.txt.',
+            });
+            continue;
+          }
+
+          if (webContentResult.error || !webContentResult.rawHtmlContent) {
+            console.warn(`Could not fetch content or content was empty for ${currentUrlToProcess}. Error: ${webContentResult.error || 'No raw HTML content'}.`);
+            await updateSupabaseRecord(supabaseClient, currentUrlToProcess, {
+              summary: webContentResult.error || 'No raw HTML content was obtained. AI processing cannot proceed.',
+              status: STATUS.ERROR_FETCHING,
+              agent_error_message: webContentResult.error || 'Raw HTML content is null or empty.',
+              agent_progress_message: 'Content fetching failed or returned empty.',
+            });
+            continue;
+          }
+
+          await updateSupabaseRecord(supabaseClient, currentUrlToProcess, {
+            status: STATUS.CONTENT_FETCHED,
+            agent_progress_message: `Successfully fetched raw HTML. Length: ${webContentResult.rawHtmlContent.length}.`,
+            agent_error_message: null,
+          });
+
+          // --- Step 3 (was 4): Extract Main Content & Prepare for Link Discovery ---
+          let discoveredLinksOnPage: string[] = [];
+          if (webContentResult.extractedArticle) {
+            discoveredLinksOnPage = webContentResult.extractedArticle.discoveredLinks || [];
+            console.log(`Successfully extracted main content for ${currentUrlToProcess}. Title: "${webContentResult.extractedArticle.title}". Found ${discoveredLinksOnPage.length} links.`);
+            await updateSupabaseRecord(supabaseClient, currentUrlToProcess, {
+              title: webContentResult.extractedArticle.title,
+              status: STATUS.CONTENT_EXTRACTED,
+              agent_progress_message: `Main content extracted. Title: "${webContentResult.extractedArticle.title}". Links found: ${discoveredLinksOnPage.length}.`,
+            });
+          } else {
+            console.warn(`ExtractedArticle object is null for ${currentUrlToProcess}, though rawHTML was present. This indicates a severe extraction issue.`);
+            await updateSupabaseRecord(supabaseClient, currentUrlToProcess, {
+              status: STATUS.ERROR_EXTRACTION,
+              agent_progress_message: 'Critical error during content extraction phase (JSDOM/Readability setup or severe parsing error). No content or links extracted.',
+              agent_error_message: 'ExtractedArticle object was null after successful HTML fetch.',
+            });
+            discoveredLinksOnPage = [];
+          }
+
+          // --- Step 4 (was 4.5): Process Discovered Links ---
+          // Only process discovered links if this currentUrlToProcess is the initial site for this discovery branch,
+          // OR if we haven't hit the link processing limit for this branch yet.
+          const canProcessMoreLinksFromThisBranch = discoveredLinksProcessedCountForInitialSite < MAX_DISCOVERED_LINKS_PER_STRATEGY_SITE;
+
+          if (discoveredLinksOnPage.length > 0 && canProcessMoreLinksFromThisBranch) {
+            console.log(`Processing up to ${MAX_DISCOVERED_LINKS_PER_STRATEGY_SITE - discoveredLinksProcessedCountForInitialSite} discovered links from ${currentUrlToProcess} (Origin: ${initialSiteUrl})`);
+            for (const discoveredLink of discoveredLinksOnPage) {
+              const nextDepth = currentDepth + 1;
+              if (nextDepth > MAX_CRAWL_DEPTH) {
+                console.log(`Skipping discovered link (depth limit exceeded ${nextDepth} > ${MAX_CRAWL_DEPTH}): ${discoveredLink} from page ${currentUrlToProcess}`);
+                console.log(`Further link discovery from page ${currentUrlToProcess} will exceed MAX_CRAWL_DEPTH. Stopping discovery from this page.`);
+                break;
+              }
+
+              if (discoveredLinksProcessedCountForInitialSite >= MAX_DISCOVERED_LINKS_PER_STRATEGY_SITE) {
+                console.log(`Reached max discovered links (${MAX_DISCOVERED_LINKS_PER_STRATEGY_SITE}) for origin ${initialSiteUrl}. No more links will be queued from this page (${currentUrlToProcess}).`);
+                break;
+              }
+
+              let discoveredLinkHostname: string | undefined;
+              try {
+                discoveredLinkHostname = new URL(discoveredLink).hostname;
+              } catch (e: any) {
+                console.warn(`Invalid discovered URL ${discoveredLink}: ${e.message}. Skipping.`);
+                continue;
+              }
+
+              if (STAY_ON_SAME_DOMAIN && discoveredLinkHostname !== initialSiteHostname) {
+                console.log(`Skipping link (different domain): ${discoveredLink} (origin host: ${initialSiteHostname}, link host: ${discoveredLinkHostname})`);
+                continue;
+              }
+
+              if (globallyProcessedOrQueuedUrlsInThisRun.has(discoveredLink)) {
           // Allow initialSiteUrl to proceed if it's its first appearance from this specific strategy's initialSiteUrl list
           if (globallyProcessedOrQueuedUrlsInThisRun.has(currentUrlToProcess) && currentUrlToProcess !== initialSiteUrl) {
              // This condition needs refinement: an initialSiteUrl for strategy B could have been a discovered link from strategy A.
