@@ -67,13 +67,13 @@ AI 圖像生成 (Image Generation)
             [x] 2.1.1. (Agent 腳本) 實作連接 Supabase (或所選資料庫) 的邏輯。(已加入 `@supabase/supabase-js` 依賴，腳本中已包含 Supabase Client 初始化邏輯)
             [x] 2.1.2. (Agent 腳本) 實作核心內容處理循環：讀取策略 -> (爬取/發現URL) -> 檢查重複 -> (透過API)AI處理 -> 儲存。(腳本中主要循環邏輯已初步實現)
         [~] 2.2. **網頁內容爬取與解析 (Web Content Scraping & Parsing)**
-            [~] 2.2.1. 設計與實作爬蟲邏輯。 (Agent 現已支援從目標網站探索並處理第一層連結 (`MAX_CRAWL_DEPTH=1`)。進一步的多層爬取或更複雜的探索邏輯待開發)。
+            [~] 2.2.1. 設計與實作爬蟲邏輯。 (Agent 現已支援從目標網站探索並處理最多兩層連結 (`MAX_CRAWL_DEPTH=2`)。更深層次的多層爬取或更複雜的探索邏輯待開發)。
             [x] 2.2.2. 實作 `robots.txt` 遵循機制。
             [x] 2.2.3. 實作網頁主要內容提取邏輯 (若 Agent 需要直接解析而非僅傳遞 URL 到 AI Flow)。(目前依賴AI Flow內部工具)
             [x] 2.2.4. 提升處理不同網頁結構的彈性與錯誤處理。
         [~] 2.3. **整合使用者定義的搜尋策略 (Integrate User-defined Search Strategies)**
             [x] 2.3.1. 實作從資料庫 (Supabase `search_strategies` 表) 讀取使用者設定的搜尋策略。(Agent 腳本中 `fetchStrategiesFromSupabase` 已包含 Supabase 查詢邏輯，並有 mock 回退)
-            [~] 2.3.2. 根據讀取的策略執行內容搜尋或網站爬取 (目前能處理 `targetSites` 中的 URL 及其發現的第一層連結 (`MAX_CRAWL_DEPTH=1`)。基於關鍵字的內容搜尋功能尚未實現)。
+            [~] 2.3.2. 根據讀取的策略執行內容搜尋或網站爬取 (目前能處理 `targetSites` 中的 URL 及其發現的最多兩層連結 (`MAX_CRAWL_DEPTH=2`)。基於關鍵字的內容搜尋功能尚未實現)。
         [x] 2.4. **處理重複內容 (Handle Duplicate Content)**
             [x] 2.4.1. 實作在資料庫 (Supabase `curated_content` 表) 中檢查 URL 是否已存在的邏輯，防止重複處理。(Agent 腳本中 `checkForDuplicates` 已包含 Supabase 查詢邏輯)
         [x] 2.5. **觸發 AI 處理流程 (Trigger AI Processing)**

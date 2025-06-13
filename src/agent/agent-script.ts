@@ -64,7 +64,7 @@ const STATUS = {
 // Configuration for Link Discovery
 const MAX_DISCOVERED_LINKS_PER_STRATEGY_SITE = 10; // Max new links to process from one initial strategy site's discovery path
 const STAY_ON_SAME_DOMAIN = true; // If true, discovered links must be on the same domain as their origin (initial strategy site)
-const MAX_CRAWL_DEPTH = 1; // 0: initial sites only; 1: links on initial sites; etc.
+const MAX_CRAWL_DEPTH = 2; // 0: initial sites only; 1: links on initial sites; etc.
 
 const OUR_USER_AGENT = 'ContentCuratorBot/1.0 (+http://yourprojecturl.com/botinfo)';
 

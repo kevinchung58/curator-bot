@@ -50,7 +50,7 @@ The agent's behavior is configured through environment variables and internal co
 *   **Link Discovery Configuration:**
     *   `MAX_DISCOVERED_LINKS_PER_STRATEGY_SITE`: Maximum number of new links to process that are discovered from a single initial strategy site and its subsequent child pages (Default: 10).
     *   `STAY_ON_SAME_DOMAIN`: Boolean flag to control if discovered links must be on the same domain as their originating `initialSiteUrl` from the strategy (Default: `true`).
-    *   `MAX_CRAWL_DEPTH`: Controls how many levels deep the agent will follow discovered links from an initial strategy site (e.g., 0 for initial sites only, 1 for links on initial sites, etc. Default: 1).
+    *   `MAX_CRAWL_DEPTH`: Controls how many levels deep the agent will follow discovered links from an initial strategy site (e.g., 0 for initial sites only, 1 for links on initial sites, etc. Default: 2).
 *   **Status Constants (`STATUS` object):** A defined set of string constants representing the various states of content processing (see Status Management section).
 
 ## 4. Core Workflow (`runAgent` function)

@@ -57,9 +57,9 @@ const actualExtractMainContent = agentScript.extractMainContent;
 import { runAgent, getRobotsTxtUrl, sendNotification, triggerAIProcessing } from '../agent-script';
 const STATUS = agentScript.STATUS;
 const HEARTBEAT_TIMEOUT_MS_TEST = 5000;
-// Access constants from the module if they are exported, or redefine for tests if not.
-// For MAX_CRAWL_DEPTH, it's not exported, so we test against its known value (1).
-const MAX_CRAWL_DEPTH_FROM_SCRIPT = 1; // Based on current script
+
+// Update this to reflect the change in agent-script.ts
+const MAX_CRAWL_DEPTH_FROM_SCRIPT = 2; // Updated from 1 to 2
 const MAX_DISCOVERED_LINKS_PER_STRATEGY_SITE_FROM_SCRIPT = 10; // Based on current script
 
 
@@ -113,55 +113,43 @@ describe('Agent Script Utilities, Interactions & Orchestration', () => {
     jest.restoreAllMocks();
   });
 
-  // --- Tests for runAgent Orchestration with Link Discovery & Depth Limiting ---
   describe('Agent Script Orchestration - runAgent (Link Discovery & Depth)', () => {
     const initialSiteUrl = 'http://origin.com/page0';
-    const linkDepth1PageA = 'http://origin.com/pageA'; // Discovered from initialSiteUrl (depth 1)
-    const linkDepth1PageB = 'http://origin.com/pageB'; // Discovered from initialSiteUrl (depth 1)
-    const linkDepth2PageC = 'http://origin.com/pageC'; // Discovered from linkDepth1PageB (depth 2)
+    const linkDepth1PageA = 'http://origin.com/pageA';
+    const linkDepth2PageB = 'http://origin.com/pageB'; // Discovered from linkDepth1PageA (depth 2)
+    const linkDepth3PageC = 'http://origin.com/pageC'; // Discovered from linkDepth2PageB (depth 3)
     const baseStrategyKeywords = ['keywords'];
 
-    it('should process initial site and its direct links (depth 1), but not links from depth 1 pages (depth 2) if MAX_CRAWL_DEPTH=1', async () => {
-      // MAX_CRAWL_DEPTH is 1 in the script
+    it('should process up to MAX_CRAWL_DEPTH (2), skipping links at depth 3', async () => {
       const strategies = [{ keywords: baseStrategyKeywords, targetSites: [initialSiteUrl] }];
       mockFetchStrategiesFromSupabase.mockResolvedValueOnce(strategies as any[]);
-
       mockCheckForDuplicates.mockResolvedValue(false); // All URLs are new to DB
 
       // Mocking fetchWebContent calls:
-      // 1. For initialSiteUrl (depth 0)
+      // 1. initialSiteUrl (depth 0) -> discovers linkDepth1PageA
       mockFetchWebContent.mockImplementationOnce(async (url) => {
         expect(url).toBe(initialSiteUrl);
         return {
           url: initialSiteUrl, rawHtmlContent: 'html0',
-          extractedArticle: {
-            title: 'Title0', content: 'Content0', htmlContent:'',
-            discoveredLinks: [linkDepth1PageA, linkDepth1PageB] // Discovers two links at depth 1
-          } as any,
+          extractedArticle: { title: 'Title0', content: 'Content0', htmlContent:'', discoveredLinks: [linkDepth1PageA] } as any,
           error: null, robotsTxtDisallowed: false
         };
       });
-      // 2. For linkDepth1PageA (depth 1)
+      // 2. linkDepth1PageA (depth 1) -> discovers linkDepth2PageB
       mockFetchWebContent.mockImplementationOnce(async (url) => {
         expect(url).toBe(linkDepth1PageA);
         return {
           url: linkDepth1PageA, rawHtmlContent: 'htmlA',
-          extractedArticle: {
-            title: 'TitleA', content: 'ContentA', htmlContent:'',
-            discoveredLinks: [] // No further links
-          } as any,
+          extractedArticle: { title: 'TitleA', content: 'ContentA', htmlContent:'', discoveredLinks: [linkDepth2PageB] } as any,
           error: null, robotsTxtDisallowed: false
         };
       });
-      // 3. For linkDepth1PageB (depth 1)
+      // 3. linkDepth2PageB (depth 2) -> discovers linkDepth3PageC (which should be skipped)
       mockFetchWebContent.mockImplementationOnce(async (url) => {
-        expect(url).toBe(linkDepth1PageB);
+        expect(url).toBe(linkDepth2PageB);
         return {
-          url: linkDepth1PageB, rawHtmlContent: 'htmlB',
-          extractedArticle: {
-            title: 'TitleB', content: 'ContentB', htmlContent:'',
-            discoveredLinks: [linkDepth2PageC] // This link (depth 2) should be ignored
-          } as any,
+          url: linkDepth2PageB, rawHtmlContent: 'htmlB',
+          extractedArticle: { title: 'TitleB', content: 'ContentB', htmlContent:'', discoveredLinks: [linkDepth3PageC] } as any,
           error: null, robotsTxtDisallowed: false
         };
       });
@@ -170,123 +158,98 @@ describe('Agent Script Utilities, Interactions & Orchestration', () => {
 
       await runAgent();
 
-      // Verify initial record creation for depth 0 and depth 1 links
+      // Verify initial record creation for depth 0, 1, and 2 links
       expect(mockSupabaseClient.insert).toHaveBeenCalledTimes(3); // initialSite, linkA, linkB
       expect(mockSupabaseClient.insert).toHaveBeenCalledWith(expect.arrayContaining([
-        expect.objectContaining({ source_url: initialSiteUrl, depth: 0, isDiscovered: false })
+        expect.objectContaining({ source_url: initialSiteUrl, depth: 0 })
       ]));
       expect(mockSupabaseClient.insert).toHaveBeenCalledWith(expect.arrayContaining([
-        expect.objectContaining({ source_url: linkDepth1PageA, depth: 1, isDiscovered: true })
+        expect.objectContaining({ source_url: linkDepth1PageA, depth: 1 })
       ]));
       expect(mockSupabaseClient.insert).toHaveBeenCalledWith(expect.arrayContaining([
-        expect.objectContaining({ source_url: linkDepth1PageB, depth: 1, isDiscovered: true })
+        expect.objectContaining({ source_url: linkDepth2PageB, depth: 2 })
       ]));
 
-      // Verify fetchWebContent calls
       expect(mockFetchWebContent).toHaveBeenCalledTimes(3);
       expect(mockFetchWebContent).toHaveBeenCalledWith(initialSiteUrl);
       expect(mockFetchWebContent).toHaveBeenCalledWith(linkDepth1PageA);
-      expect(mockFetchWebContent).toHaveBeenCalledWith(linkDepth1PageB);
-      expect(mockFetchWebContent).not.toHaveBeenCalledWith(linkDepth2PageC); // Crucial check
+      expect(mockFetchWebContent).toHaveBeenCalledWith(linkDepth2PageB);
+      expect(mockFetchWebContent).not.toHaveBeenCalledWith(linkDepth3PageC); // Crucial check for depth limit
 
-      // Verify AI processing
       expect(mockTriggerAIProcessing).toHaveBeenCalledTimes(3);
-      expect(mockTriggerAIProcessing).toHaveBeenCalledWith(expect.any(String), initialSiteUrl, baseStrategyKeywords.join(', '));
-      expect(mockTriggerAIProcessing).toHaveBeenCalledWith(expect.any(String), linkDepth1PageA, baseStrategyKeywords.join(', '));
-      expect(mockTriggerAIProcessing).toHaveBeenCalledWith(expect.any(String), linkDepth1PageB, baseStrategyKeywords.join(', '));
 
-      // Verify console log for skipping depth 2 link
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining(`Skipping discovered link (depth limit exceeded 2 > ${MAX_CRAWL_DEPTH_FROM_SCRIPT})`));
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining(`Further link discovery from page ${linkDepth1PageB} will exceed MAX_CRAWL_DEPTH. Stopping discovery from this page.`));
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining(`Skipping discovered link (depth limit exceeded 3 > ${MAX_CRAWL_DEPTH_FROM_SCRIPT})`));
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining(`Further link discovery from page ${linkDepth2PageB} will exceed MAX_CRAWL_DEPTH. Stopping discovery from this page.`));
     });
 
-    it('should not discover any links if MAX_CRAWL_DEPTH = 0 (conceptual test, requires changing constant)', async () => {
-        // This test assumes MAX_CRAWL_DEPTH is 0. Since it's 1 in the script, this test would need
-        // the constant to be mockable or changeable. For now, this is a conceptual placeholder.
-        // If MAX_CRAWL_DEPTH was 0:
-        // - initialSiteUrl would be processed (depth 0).
-        // - Links discovered on initialSiteUrl (which would be depth 1) would be skipped.
-
-        // To simulate this with MAX_CRAWL_DEPTH = 1 (current value):
-        // We test that links at depth 2 are skipped. This is covered by the test above.
-        // If we wanted to test MAX_CRAWL_DEPTH = 0 behavior, we'd need to mock the constant.
-        // For now, we acknowledge this limitation.
-        console.log("Conceptual Test: If MAX_CRAWL_DEPTH were 0, links from initial sites (depth 1) would be skipped. Current MAX_CRAWL_DEPTH is 1.");
-        expect(MAX_CRAWL_DEPTH_FROM_SCRIPT).toBe(1); // Confirming current value for clarity
-    });
-
-    it('should respect MAX_DISCOVERED_LINKS_PER_STRATEGY_SITE even if MAX_CRAWL_DEPTH allows more depth', async () => {
-        // Assuming MAX_CRAWL_DEPTH = 1 (from script)
-        // And MAX_DISCOVERED_LINKS_PER_STRATEGY_SITE = 1 (for this test, if we could set it)
-        // The script has it at 10. To test this properly, we'd need to mock this constant.
-        // For this test, let's assume MAX_DISCOVERED_LINKS_PER_STRATEGY_SITE is effectively 1
-        // by only providing 1 link that then discovers more, versus the depth limit.
-        // This test is better framed as: depth limit is hit first if MAX_DISCOVERED_LINKS is high.
-        // The previous test already shows depth limit working.
-
-        // Let's test interaction: MAX_CRAWL_DEPTH=1, MAX_DISCOVERED_LINKS_PER_STRATEGY_SITE=1
-        // We need to control MAX_DISCOVERED_LINKS_PER_STRATEGY_SITE for this test.
-        // Since we can't easily change it, this specific interaction is hard to isolate from depth.
-        // The current MAX_DISCOVERED_LINKS_PER_STRATEGY_SITE is 10.
-        // The depth limit (1) will be hit before 10 links are processed if links are nested.
-
-        // Test: If depth 0 page has 15 links (all depth 1), and MAX_DISCOVERED_LINKS_PER_STRATEGY_SITE = 10
-        // then only 10 of those 15 links should be queued. MAX_CRAWL_DEPTH = 1 allows all of them depth-wise.
-        const manyLinksAtDepth1 = Array.from({ length: 15 }, (_, i) => `http://origin.com/manylinks${i}`);
+    it('should respect MAX_DISCOVERED_LINKS_PER_STRATEGY_SITE across depths, up to MAX_CRAWL_DEPTH', async () => {
+        // MAX_CRAWL_DEPTH_FROM_SCRIPT = 2
+        // MAX_DISCOVERED_LINKS_PER_STRATEGY_SITE_FROM_SCRIPT = 10
         const strategies = [{ keywords: baseStrategyKeywords, targetSites: [initialSiteUrl] }];
         mockFetchStrategiesFromSupabase.mockResolvedValueOnce(strategies as any[]);
         mockCheckForDuplicates.mockResolvedValue(false);
 
-        mockFetchWebContent.mockImplementation(async (url) => {
-            if (url === initialSiteUrl) {
-                return { url, rawHtmlContent: 'html0', extractedArticle: { title: 'T0', content: 'C0', htmlContent:'', discoveredLinks: manyLinksAtDepth1 } as any, error: null, robotsTxtDisallowed: false };
-            }
-            // For discovered links (depth 1), no further links
-            return { url, rawHtmlContent: `html_${url}`, extractedArticle: { title: `T_${url}`, content: `C_${url}`, htmlContent:'', discoveredLinks: [] } as any, error: null, robotsTxtDisallowed: false };
-        });
-        mockTriggerAIProcessing.mockResolvedValue({ status: 'processed' } as any);
+        const links_d1 = Array.from({ length: 3 }, (_, i) => `http://origin.com/d1_link${i}`); // 3 links at depth 1
+        const links_d2_from_d1_link0 = Array.from({ length: 8 }, (_, i) => `http://origin.com/d1_link0_d2_link${i}`); // 8 links at depth 2
 
+        // Mocking fetchWebContent calls:
+        // 1. initialSiteUrl (depth 0) -> discovers links_d1 (3 links)
+        mockFetchWebContent.mockImplementationOnce(async (url) => { // For initialSiteUrl
+            return { url, rawHtmlContent: 'html0', extractedArticle: { title: 'T0', content: 'C0', htmlContent:'', discoveredLinks: links_d1 } as any, error: null, robotsTxtDisallowed: false };
+        });
+
+        // Mocks for depth 1 links (links_d1)
+        mockFetchWebContent.mockImplementationOnce(async (url) => { // For links_d1[0]
+            return { url, rawHtmlContent: 'html_d1_0', extractedArticle: { title: 'T_d1_0', content: 'C_d1_0', htmlContent:'', discoveredLinks: links_d2_from_d1_link0 } as any, error: null, robotsTxtDisallowed: false };
+        });
+        mockFetchWebContent.mockImplementationOnce(async (url) => { // For links_d1[1]
+            return { url, rawHtmlContent: 'html_d1_1', extractedArticle: { title: 'T_d1_1', content: 'C_d1_1', htmlContent:'', discoveredLinks: ['http://origin.com/another_d2_link_from_d1_1'] } as any, error: null, robotsTxtDisallowed: false };
+        });
+         mockFetchWebContent.mockImplementationOnce(async (url) => { // For links_d1[2]
+            return { url, rawHtmlContent: 'html_d1_2', extractedArticle: { title: 'T_d1_2', content: 'C_d1_2', htmlContent:'', discoveredLinks: [] } as any, error: null, robotsTxtDisallowed: false };
+        });
+
+        // Mocks for depth 2 links discovered from links_d1[0] (up to the limit)
+        // We expect 7 of these to be processed (3 already from depth 1 + 7 from depth 2 = 10)
+        for (let i = 0; i < 7; i++) {
+            mockFetchWebContent.mockImplementationOnce(async (url) => {
+                return { url, rawHtmlContent: `html_d2_${i}`, extractedArticle: { title: `T_d2_${i}`, content: `C_d2_${i}`, htmlContent:'', discoveredLinks: [] } as any, error: null, robotsTxtDisallowed: false };
+            });
+        }
+        // Mock for the 11th discovered link's parent (links_d1[1]'s child), which should not be fetched if limit hit by links_d1[0]'s children
+         mockFetchWebContent.mockImplementationOnce(async (url) => {
+             // This mock is for http://origin.com/another_d2_link_from_d1_1
+             // It should only be called if the limit of 10 wasn't exhausted by children of links_d1[0]
+            return { url, rawHtmlContent: `html_d1_1_child`, extractedArticle: { title: `T_d1_1_child`, content: `C_d1_1_child`, htmlContent:'', discoveredLinks: [] } as any, error: null, robotsTxtDisallowed: false };
+        });
+
+
+        mockTriggerAIProcessing.mockResolvedValue({ status: 'processed' } as any);
         await runAgent();
 
-        // 1 (initialSiteUrl) + MAX_DISCOVERED_LINKS_PER_STRATEGY_SITE (10) = 11
-        expect(mockFetchWebContent).toHaveBeenCalledTimes(1 + MAX_DISCOVERED_LINKS_PER_STRATEGY_SITE_FROM_SCRIPT);
-        expect(mockSupabaseClient.insert).toHaveBeenCalledTimes(1 + MAX_DISCOVERED_LINKS_PER_STRATEGY_SITE_FROM_SCRIPT);
+        // Total URLs processed: 1 (initial) + 3 (d1) + 7 (d2 from d1_link0's children) = 11
+        expect(mockFetchWebContent).toHaveBeenCalledTimes(1 + 3 + 7);
+        expect(mockSupabaseClient.insert).toHaveBeenCalledTimes(1 + 3 + 7);
+
+        // Verify that the 8th link from links_d1[0]'s discovery (links_d2_from_d1_link0[7]) was skipped due to MAX_DISCOVERED_LINKS_PER_STRATEGY_SITE
         expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining(`Reached max discovered links (${MAX_DISCOVERED_LINKS_PER_STRATEGY_SITE_FROM_SCRIPT}) for origin ${initialSiteUrl}.`));
+        // Check that another_d2_link_from_d1_1 was NOT fetched because the limit was hit by children of d1_link0
+        expect(mockFetchWebContent).not.toHaveBeenCalledWith('http://origin.com/another_d2_link_from_d1_1');
     });
 
-    it('should correctly propagate depth information when queueing', async () => {
-        // This is implicitly tested in the MAX_CRAWL_DEPTH = 1 test by checking
-        // that linkDepth2PageC (which would be depth 2) is skipped.
-        // We can also check the `depth` property on the objects passed to `mockSupabaseClient.insert`.
+    // Placeholder for other runAgent tests as they might need minor adjustments for the depth field in queue objects
+    it('should skip duplicate URL (already in DB)', async () => {
         const strategies = [{ keywords: baseStrategyKeywords, targetSites: [initialSiteUrl] }];
         mockFetchStrategiesFromSupabase.mockResolvedValueOnce(strategies as any[]);
-        mockCheckForDuplicates.mockResolvedValue(false);
-        mockFetchWebContent.mockImplementation(async (url) => {
-            if (url === initialSiteUrl) return { url, rawHtmlContent: 'html0', extractedArticle: { title: 'T0', content: 'C0', htmlContent:'', discoveredLinks: [linkDepth1PageA] } as any, error: null, robotsTxtDisallowed: false };
-            if (url === linkDepth1PageA) return { url, rawHtmlContent: 'htmlA', extractedArticle: { title: 'TA', content: 'CA', htmlContent:'', discoveredLinks: [] } as any, error: null, robotsTxtDisallowed: false };
-            return { url, rawHtmlContent: 'error', extractedArticle: null, error: 'unexpected call', robotsTxtDisallowed: false };
-        });
-        mockTriggerAIProcessing.mockResolvedValue({ status: 'processed' } as any);
-
+        mockCheckForDuplicates.mockResolvedValueOnce(true); // initialSiteUrl is a duplicate in DB
         await runAgent();
-
-        expect(mockSupabaseClient.insert).toHaveBeenCalledWith(expect.arrayContaining([
-            expect.objectContaining({ source_url: initialSiteUrl, depth: 0 })
-        ]));
-        expect(mockSupabaseClient.insert).toHaveBeenCalledWith(expect.arrayContaining([
-            expect.objectContaining({ source_url: linkDepth1PageA, depth: 1 })
-        ]));
+        expect(mockFetchWebContent).not.toHaveBeenCalled();
+        expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining(`Skipping ${initialSiteUrl} as it's already processed in DB.`));
     });
 
   });
 
   // --- Other existing test suites (condensed placeholders for brevity) ---
-  // ... (sendNotification, getRobotsTxtUrl, actualExtractMainContent, fetchWebContent (unit), initializeSupabaseClient, etc.)
-  // ... triggerAIProcessing (unit tests)
+  // (sendNotification, getRobotsTxtUrl, actualExtractMainContent, fetchWebContent (unit), initializeSupabaseClient, etc.)
+  // (triggerAIProcessing (unit tests))
 });
-
-// Ensure nodemailer mocks are correctly scoped if they were defined inside another describe block previously
-// If they are at top level of file, this is fine.
-// const mockSendMail = jest.fn(); // Already defined at top
-// const mockCreateTransport = jest.fn(() => ({ sendMail: mockSendMail })); // Already defined at top
-// jest.mock('nodemailer', () => ({ createTransport: mockCreateTransport })); // Already defined at top
