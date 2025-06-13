@@ -143,7 +143,7 @@ UI/UX 優化
     目標: 在雲端平台（如 Cloud Monitoring，或針對 GitHub Actions/Supabase 的特定方案）設定警報，以便在錯誤率或效能下降時能即時收到通知。
     [ ] 1. 識別應用程式中的關鍵效能指標 (KPIs) 和潛在錯誤點。
     [ ] 2. (若使用 Google Cloud 相關服務) 在 Cloud Monitoring 中設定基於日誌的警報，針對嚴重錯誤或異常行為。
-    [~] 3. (若使用 Supabase/GH Actions 方案) 設定 Uptime Kuma (或類似服務) 的心跳監控和失敗警報，或利用 GitHub Actions 的失敗通知。(GitHub Actions workflow 本身有失敗通知，Uptime Kuma 為可選增強)
+    [~] 3. (若使用 Supabase/GH Actions 方案) 設定 Uptime Kuma (或類似服務) 的心跳監控和失敗警報，或利用 GitHub Actions 的失敗通知。(Agent 現已支援在成功運行結束後發送 HTTP GET 心跳到指定的 \`UPTIME_KUMA_PUSH_URL\`。Uptime Kuma 服務本身的設定與警報配置仍需使用者操作。GitHub Actions workflow 本身有失敗通知可作為補充)。
 
 [~] **依賴管理**
     目標: 定期檢查並更新 `package.json` 中的套件版本。

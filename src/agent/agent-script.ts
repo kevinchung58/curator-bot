@@ -42,6 +42,9 @@ const MAX_API_CALL_RETRIES = 3;
 const API_CALL_RETRY_DELAY_MS = 2000;
 const API_CALL_TIMEOUT_MS = 20000; // Timeout for each API call attempt
 
+// Configuration for Uptime Kuma Heartbeat
+const HEARTBEAT_TIMEOUT_MS = 5000; // 5 seconds
+
 
 // Statuses for curated_content table
 const STATUS = {
@@ -631,9 +634,15 @@ async function storeResultsInSupabase(supabaseClient: SupabaseClient, processedD
  */
 async function runAgent() {
   console.log(`Content Curator Agent started running at: ${new Date().toISOString()}`);
+  let agentRunSuccessfullyCompleted = false; // Flag to track successful completion for heartbeat
 
   // Startup check for email notification configuration
-  const { EMAIL_HOST, EMAIL_USER, EMAIL_PASS, NOTIFICATION_EMAIL_FROM, NOTIFICATION_EMAIL_TO } = process.env;
+  const {
+    EMAIL_HOST, EMAIL_USER, EMAIL_PASS,
+    NOTIFICATION_EMAIL_FROM, NOTIFICATION_EMAIL_TO,
+    UPTIME_KUMA_PUSH_URL
+  } = process.env;
+
   if (!EMAIL_HOST || !EMAIL_USER || !EMAIL_PASS || !NOTIFICATION_EMAIL_FROM || !NOTIFICATION_EMAIL_TO) {
     console.warn(`
 --- [AGENT STARTUP WARNING] ---
@@ -653,44 +662,41 @@ Current values (undefined means not set, sensitive fields are masked if present)
     console.log('[AGENT STARTUP] Email notification system appears to be configured.');
   }
 
+  // Startup check for Uptime Kuma configuration
+  if (UPTIME_KUMA_PUSH_URL) {
+    console.log(`[AGENT STARTUP] Uptime Kuma heartbeat pings are configured to: ${UPTIME_KUMA_PUSH_URL}`);
+  } else {
+    console.info('[AGENT STARTUP] Uptime Kuma heartbeat URL (UPTIME_KUMA_PUSH_URL) is not set. Heartbeat pings will be skipped.');
+  }
+
   const globallyProcessedOrQueuedUrlsInThisRun = new Set<string>(); // Tracks all URLs processed or queued in this entire agent run
   let supabaseClient;
 
-  try {
+  try { // This outer try handles Supabase init and strategy fetching
     supabaseClient = await initializeSupabaseClient();
-  } catch (error: any) {
-    const errorMessage = `Agent critical error: Failed to initialize Supabase. Agent cannot continue. Error: ${error.message}`;
-    console.error(errorMessage);
-    await sendNotification(
-        'Agent Failed: Supabase Initialization Error',
-        `${errorMessage}\n\nStack: ${error.stack}`,
-        true
-    );
-    process.exit(1); // Exit if Supabase can't be initialized
-  }
+    const strategies = await fetchStrategiesFromSupabase(supabaseClient);
 
-  const strategies = await fetchStrategiesFromSupabase(supabaseClient);
+    if (!strategies || strategies.length === 0) {
+      const warningMessage = 'No search strategies found or fetched from Supabase. The agent has no work to do.';
+      console.warn(warningMessage);
+      await sendNotification(
+          'Agent Warning: No Search Strategies',
+          warningMessage,
+          false
+      );
+      console.log('Agent will exit as there are no strategies to process.');
+      agentRunSuccessfullyCompleted = true; // Agent ran as expected, even if no work.
+      return; // Normal exit for "no strategies"
+    }
+    console.log(`Processing ${strategies.length} strategies.`);
 
-  if (!strategies || strategies.length === 0) {
-    const warningMessage = 'No search strategies found or fetched from Supabase. The agent has no work to do.';
-    console.warn(warningMessage);
-    await sendNotification(
-        'Agent Warning: No Search Strategies',
-        warningMessage,
-        false // Not critical, but an important operational note
-    );
-    console.log('Agent will exit as there are no strategies to process.');
-    return;
-  }
-  console.log(`Processing ${strategies.length} strategies.`);
+    // Overall try-catch for the main strategy processing loop
+    try {
+      for (const strategy of strategies) {
+        console.log(`\nProcessing strategy: Keywords - ${(strategy.keywords || []).join(', ')}, Initial Sites: ${(strategy.targetSites || []).join(', ')}`);
+        const baseStrategyKeywords = strategy.keywords || ['untagged'];
 
-  // Overall try-catch for the strategy processing loop
-  try {
-    for (const strategy of strategies) {
-      console.log(`\nProcessing strategy: Keywords - ${(strategy.keywords || []).join(', ')}, Initial Sites: ${(strategy.targetSites || []).join(', ')}`);
-      const baseStrategyKeywords = strategy.keywords || ['untagged'];
-
-      for (const initialSiteUrl of (strategy.targetSites || [])) {
+        for (const initialSiteUrl of (strategy.targetSites || [])) {
         // Queue items will now be objects to carry discovery context
         const urlsToProcess: { url: string; isDiscovered: boolean; originalStrategyKeywords: string[]; }[] = [
           { url: initialSiteUrl, isDiscovered: false, originalStrategyKeywords: baseStrategyKeywords }
@@ -966,6 +972,65 @@ Error: ${mainLoopError.message}\n\nStack: ${mainLoopError.stack}`,
     );
     // Depending on desired behavior, you might re-throw or exit
     // process.exit(1); // Or allow to proceed to end of script if appropriate
+    }
+    // If the main processing loop completes without throwing to its catch block, mark as successful.
+    agentRunSuccessfullyCompleted = true;
+
+  } finally {
+    if (agentRunSuccessfullyCompleted) {
+      const uptimeKumaPushUrl = process.env.UPTIME_KUMA_PUSH_URL;
+      if (uptimeKumaPushUrl) {
+        console.log(`Attempting to send heartbeat ping to Uptime Kuma: ${uptimeKumaPushUrl}`);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), HEARTBEAT_TIMEOUT_MS);
+        try {
+          const response = await fetch(uptimeKumaPushUrl, {
+            method: 'GET',
+            signal: controller.signal,
+            headers: { 'User-Agent': OUR_USER_AGENT }
+          });
+          clearTimeout(timeoutId);
+          if (response.ok) {
+            console.log('Uptime Kuma heartbeat ping successful.');
+          } else {
+            console.warn(`Uptime Kuma heartbeat ping failed: ${response.status} ${response.statusText}`);
+            // Optionally send a non-critical notification if heartbeat fails
+            await sendNotification(
+                'Agent Warning: Uptime Kuma Heartbeat Failed',
+                `The agent successfully completed its run, but failed to send a heartbeat to Uptime Kuma.
+URL: ${uptimeKumaPushUrl}
+Status: ${response.status} ${response.statusText}`,
+                false
+            );
+          }
+        } catch (error: any) {
+          clearTimeout(timeoutId);
+          let errorMessage = `Error sending Uptime Kuma heartbeat ping: ${error.message}`;
+          if (error.name === 'AbortError') {
+            errorMessage = `Uptime Kuma heartbeat ping timed out after ${HEARTBEAT_TIMEOUT_MS}ms.`;
+          }
+          console.warn(errorMessage);
+          await sendNotification(
+              'Agent Warning: Uptime Kuma Heartbeat Error',
+              `The agent successfully completed its run, but encountered an error sending a heartbeat to Uptime Kuma.
+URL: ${uptimeKumaPushUrl}
+Error: ${errorMessage}`,
+              false
+          );
+        }
+      } else {
+        console.log('Uptime Kuma push URL (UPTIME_KUMA_PUSH_URL) not configured. Skipping heartbeat ping.');
+      }
+      console.log(`Content Curator Agent finished successfully at: ${new Date().toISOString()}`);
+    } else {
+      // This else block will be reached if supabase init failed (process.exit) or if mainLoopError occurred and wasn't re-thrown to top.
+      // However, if supabase init fails, process.exit(1) is called, so this 'else' might only be for mainLoopError if it doesn't exit.
+      // The sendNotification for mainLoopError already covers failure.
+      // The top-level catch for runAgent() handles truly unhandled issues before this finally even.
+      // So, this specific else might be redundant if errors above always exit or are handled.
+      // Let's ensure it's clear: if agentRunSuccessfullyCompleted is false, it means an error was caught and handled *within* runAgent.
+      console.error(`Content Curator Agent finished with handled errors at: ${new Date().toISOString()}`);
+    }
   }
 }
 

@@ -31,6 +31,7 @@ The agent's behavior is configured through environment variables and internal co
     *   `EMAIL_SECURE`: Set to `'true'` if using SSL (typically port 465), otherwise `false` (for STARTTLS on port 587/25).
     *   `NOTIFICATION_EMAIL_FROM`: The "From" address for notification emails (e.g., `agent@example.com`).
     *   `NOTIFICATION_EMAIL_TO`: The recipient email address(es) for agent notifications.
+*   `UPTIME_KUMA_PUSH_URL` (Optional): The full URL to send a GET request to for Uptime Kuma heartbeat monitoring. If set, the agent will ping this URL upon successful completion of its run.
 
 ### Internal Constants
 
@@ -42,6 +43,8 @@ The agent's behavior is configured through environment variables and internal co
     *   `MAX_API_CALL_RETRIES`: Number of times to retry the API call to the Next.js endpoint (Default: 3).
     *   `API_CALL_RETRY_DELAY_MS`: Delay in milliseconds between API call retries (Default: 2000ms).
     *   `API_CALL_TIMEOUT_MS`: Timeout for each individual API call attempt (Default: 20000ms).
+*   **Heartbeat Configuration:**
+    *   `HEARTBEAT_TIMEOUT_MS`: Timeout in milliseconds for the Uptime Kuma heartbeat ping (Default: 5000ms).
 *   **User Agent:**
     *   `OUR_USER_AGENT`: The user agent string the agent uses for HTTP requests (e.g., `ContentCuratorBot/1.0 (+http://yourprojecturl.com/botinfo)`).
 *   **Link Discovery Configuration:**
@@ -169,14 +172,19 @@ Each step in the `runAgent` workflow updates the status in the Supabase record, 
     *   Individual URL processing failures (e.g., fetch error, AI processing error) are logged to Supabase for that specific URL, and the agent continues with the next URL or strategy.
     *   Failure to insert an initial record for a URL (a critical local DB step) will cause the agent to skip that URL and continue.
 *   **Notifications:**
-    *   The `runAgent` function performs a startup check for essential email environment variables (`EMAIL_HOST`, `EMAIL_USER`, `EMAIL_PASS`, `NOTIFICATION_EMAIL_FROM`, `NOTIFICATION_EMAIL_TO`). If these are not fully set, a warning is logged to the console indicating that email notifications are disabled and will be limited to console output.
-    *   The `sendNotification` function is now implemented using `nodemailer` to send email notifications if the aforementioned environment variables are correctly configured.
+    *   The `runAgent` function performs a startup check for essential email environment variables (`EMAIL_HOST`, `EMAIL_USER`, `EMAIL_PASS`, `NOTIFICATION_EMAIL_FROM`, `NOTIFICATION_EMAIL_TO`) and the optional `UPTIME_KUMA_PUSH_URL`. It logs warnings or info messages based on whether these are set.
+    *   The `sendNotification` function is now implemented using `nodemailer` to send email notifications if the email environment variables are correctly configured.
     *   If email configuration is incomplete or if an error occurs during email sending, `sendNotification` logs the notification details to the console as a fallback.
     *   Critical notifications are triggered for:
         *   Failure to initialize the Supabase client.
         *   Critical errors during the main strategy processing loop.
         *   Any unhandled top-level exceptions that would terminate the agent.
     *   Warning notifications are sent if no search strategies are found or if a processing queue for an initial site hits `MAX_ITERATIONS_PER_INITIAL_SITE`.
+*   **Heartbeat Monitoring (Uptime Kuma):**
+    *   Upon successful completion of its entire run (all strategies processed without unhandled critical errors that lead to premature exit), the agent can send a heartbeat ping (HTTP GET request) to a configured Uptime Kuma push URL.
+    *   This feature is enabled by setting the `UPTIME_KUMA_PUSH_URL` environment variable. The agent logs at startup whether this URL is configured.
+    *   The heartbeat ping is attempted with a timeout (`HEARTBEAT_TIMEOUT_MS`).
+    *   Failures during the heartbeat ping itself (e.g., network error, timeout, non-2xx response) are caught, logged, and trigger a non-critical notification via `sendNotification`, but they do not cause the agent's own run to be reported as a failure.
 *   **Supabase Errors:** Errors during Supabase operations (insert, update) are caught, logged to the console, and for individual record updates, the agent typically continues processing.
 
 ## 9. Supabase Table Interactions
