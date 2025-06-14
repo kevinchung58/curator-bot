@@ -1,4 +1,12 @@
 
+// TODO: Investigate and fix agent script issues.
+// The agent was previously run on a cron schedule and consistently failed.
+// Issues may include:
+//  - Missing or incorrect Supabase environment variables (SUPABASE_URL, SUPABASE_ANON_KEY)
+//  - Other potential issues preventing the agent from completing its tasks.
+// The cron workflow file (.github/workflows/cron.yml) has been deleted for now.
+// This script needs to be fixed before re-enabling any automated execution.
+
 /**
  * @fileOverview Content Curator Agent script.
  * This script is intended to be run by a scheduler (e.g., GitHub Actions).
